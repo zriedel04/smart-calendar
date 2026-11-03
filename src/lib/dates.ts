@@ -70,6 +70,12 @@ export function relativeDayLabel(date: ISODate, today: ISODate): string {
   return formatDate(date, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+/** Like `relativeDayLabel`, but lowercase for words so it reads well mid-sentence: "due today", "due Fri, Nov 6". */
+export function relativeDayPhrase(date: ISODate, today: ISODate): string {
+  const label = relativeDayLabel(date, today);
+  return Math.abs(daysBetween(today, date)) <= 1 ? label.toLowerCase() : label;
+}
+
 export const WEEKDAY_NAMES = [
   'Sunday',
   'Monday',
