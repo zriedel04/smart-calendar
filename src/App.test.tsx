@@ -98,6 +98,38 @@ describe('App', () => {
     expect(saved.weeklyHours[1]).toEqual([{ start: 720, end: 960 }]);
   });
 
+  it('adds several tasks at once', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Add several' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add several tasks' });
+    await user.type(within(dialog).getByLabelText('Task 1 name'), 'Read chapter 4');
+    await user.type(within(dialog).getByLabelText('Task 1 hours'), '2');
+    await user.type(within(dialog).getByLabelText('Task 2 name'), 'Lab worksheet');
+    await user.type(within(dialog).getByLabelText('Task 2 hours'), '1.5');
+    await user.click(within(dialog).getByRole('button', { name: 'Add 2 tasks' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Read chapter 4')).toBeInTheDocument();
+    expect(screen.getByText('Lab worksheet')).toBeInTheDocument();
+    expect(screen.getByText(/2 open/)).toBeInTheDocument();
+  });
+
+  it('shows work on a month calendar and crosses it off when done', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+
+    expect(screen.getByRole('heading', { name: 'November 2026' })).toBeInTheDocument();
+    // Today (Monday, Nov 2) is selected: its planned work is listed below the grid.
+    const checkbox = screen.getByRole('checkbox', { name: 'Check off "Reply to internship recruiter"' });
+    await user.click(checkbox);
+    const title = screen.getAllByText('Reply to internship recruiter').find((el) => el.tagName === 'P')!;
+    expect(title).toHaveClass('line-through');
+  });
+
   it('remembers data after a reload', async () => {
     const user = userEvent.setup();
     const { unmount } = renderApp();
