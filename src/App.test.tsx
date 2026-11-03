@@ -222,6 +222,18 @@ describe('App', () => {
     expect(saved).toMatchObject({ title: 'County fair 2026', until: '2028-10-01' });
   });
 
+  it('offers adding a task or an event at the top of every page', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    for (const tab of ['Today', 'Week', 'Month', 'Tasks', 'Schedule']) {
+      await user.click(screen.getByRole('button', { name: tab }));
+      expect(screen.getByRole('button', { name: 'Add task' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add event' })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    expect(screen.getByRole('dialog', { name: 'Add to your calendar' })).toBeInTheDocument();
+  });
+
   it('remembers data after a reload', async () => {
     const user = userEvent.setup();
     const { unmount } = renderApp();

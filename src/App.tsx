@@ -1,4 +1,4 @@
-import { CalendarCheck, CalendarDays, CalendarRange, Clock, ListTodo, Plus, Sun } from 'lucide-react';
+import { CalendarCheck, CalendarPlus, CalendarDays, CalendarRange, Clock, ListTodo, Plus, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { BulkTaskForm } from './components/BulkTaskForm';
 import { DayHoursDialog } from './components/DayHoursDialog';
@@ -6,6 +6,7 @@ import { EventForm } from './components/EventForm';
 import { ImportCalendarDialog } from './components/ImportCalendarDialog';
 import { TaskForm } from './components/TaskForm';
 import { cx } from './components/cx';
+import { Button } from './components/ui';
 import type { CalendarEvent } from './lib/availability';
 import type { ISODate } from './lib/dates';
 import { useStore } from './state/context';
@@ -85,6 +86,14 @@ export default function App() {
             </span>
             <span className="font-semibold tracking-tight">Smart Calendar</span>
           </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => editEvent()} aria-label="Add event">
+              <CalendarPlus className="size-4" /> Event
+            </Button>
+            <Button size="sm" variant="primary" onClick={addTask} aria-label="Add task">
+              <Plus className="size-4" /> Task
+            </Button>
+          </div>
         </div>
         <nav className="mx-auto max-w-4xl px-2 sm:px-4" aria-label="Main">
           <ul className="flex">
@@ -138,16 +147,6 @@ export default function App() {
         )}
       </main>
 
-      {tab !== 'schedule' && (
-        <button
-          type="button"
-          onClick={addTask}
-          className="fixed right-5 bottom-5 z-30 flex size-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:right-8 sm:bottom-8"
-          aria-label="Add task"
-        >
-          <Plus className="size-6" />
-        </button>
-      )}
 
       {dialog?.kind === 'task' && <TaskForm task={dialog.task} today={today} onClose={close} onAddMany={addMany} />}
       {dialog?.kind === 'bulk' && <BulkTaskForm today={today} onClose={close} />}

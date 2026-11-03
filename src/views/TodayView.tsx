@@ -141,9 +141,6 @@ export function TodayView({
       <Card className="p-2 sm:p-3">
         <div className="flex items-center justify-between px-2 pt-1 pb-2">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Today's list</h2>
-          <Button size="sm" variant="ghost" onClick={onAddTask}>
-            <Plus className="size-4" /> Add task
-          </Button>
         </div>
 
         {data.tasks.length === 0 ? (

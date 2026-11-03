@@ -242,10 +242,12 @@ export function EmptyState({
   icon,
   title,
   children,
+  action,
 }: {
   icon: ReactNode;
   title: string;
   children?: ReactNode;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center px-4 py-8 text-center">
@@ -254,6 +256,7 @@ export function EmptyState({
       </div>
       <p className="font-medium text-slate-900 dark:text-white">{title}</p>
       {children && <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{children}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

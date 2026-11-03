@@ -1,4 +1,4 @@
-import { CalendarPlus, Download, Pencil, Plus, RotateCcw, Upload } from 'lucide-react';
+import { CalendarPlus, Download, Pencil, RotateCcw, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { eventBlocksWork, type CalendarEvent } from '../lib/availability';
 import { formatDate, WEEKDAY_NAMES, WEEKDAYS_MONDAY_FIRST, weekdayOf, type ISODate } from '../lib/dates';
@@ -150,14 +150,9 @@ export function ScheduleView({
           title="Events"
           description="Classes, shifts, plans and birthdays. Events that take time away from work are left out of your work hours."
           action={
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" onClick={onImport}>
-                <CalendarPlus className="size-4" /> Import .ics
-              </Button>
-              <Button size="sm" onClick={() => onEditEvent()}>
-                <Plus className="size-4" /> Add event
-              </Button>
-            </div>
+            <Button size="sm" onClick={onImport}>
+              <CalendarPlus className="size-4" /> Import .ics
+            </Button>
           }
         />
         {data.events.length === 0 ? (

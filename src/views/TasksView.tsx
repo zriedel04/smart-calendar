@@ -73,15 +73,20 @@ export function TasksView({
             <CalendarPlus className="size-4" /> Import
           </Button>
           <Button onClick={onAddMany}>Add several</Button>
-          <Button variant="primary" onClick={onAddTask}>
-            <Plus className="size-4" /> Add task
-          </Button>
         </div>
       </div>
 
       {open.length === 0 && (
         <Card>
-          <EmptyState icon={<ListTodo className="size-6" />} title="No open tasks">
+          <EmptyState
+            icon={<ListTodo className="size-6" />}
+            title="No open tasks"
+            action={
+              <Button variant="primary" onClick={onAddTask}>
+                <Plus className="size-4" /> Add a task
+              </Button>
+            }
+          >
             Add a task with a due date and an estimate, and it shows up on your daily list.
           </EmptyState>
         </Card>
