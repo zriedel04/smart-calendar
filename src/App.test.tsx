@@ -203,6 +203,25 @@ describe('App', () => {
     expect(await within(dialog).findByText(/already in your calendar or already over/)).toBeInTheDocument();
   });
 
+  it('keeps the last date of a yearly event when it is edited', async () => {
+    const data = createSampleData('2026-11-02');
+    data.events = [
+      { id: 'fair', title: 'County fair', date: '2026-10-01', start: 0, end: 1440, repeat: 'yearly', allDay: true, kind: 'other', until: '2028-10-01' },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.click(screen.getByRole('button', { name: /County fair/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit event' });
+    expect(within(dialog).getByLabelText('Last date (optional)')).toHaveValue('2028-10-01');
+    await user.type(within(dialog).getByLabelText('Name'), ' 2026');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    const [saved] = JSON.parse(localStorage.getItem(STORAGE_KEY)!).events;
+    expect(saved).toMatchObject({ title: 'County fair 2026', until: '2028-10-01' });
+  });
+
   it('remembers data after a reload', async () => {
     const user = userEvent.setup();
     const { unmount } = renderApp();

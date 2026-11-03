@@ -72,7 +72,7 @@ export function EventForm({
     title: title.trim() ? null : 'Give it a name.',
     date: isISODate(date) ? null : 'Pick a date.',
     time: allDay || (startMin !== null && endMin !== null && endMin > startMin) ? null : 'It must end after it starts.',
-    until: repeat !== 'weekly' || !until || (isISODate(until) && until >= date) ? null : 'Pick a date after the first one.',
+    until: repeat === 'none' || !until || (isISODate(until) && until >= date) ? null : 'Pick a date after the first one.',
   };
 
   function submit(e: FormEvent) {
@@ -89,7 +89,7 @@ export function EventForm({
       kind,
       allDay,
       blocksWork,
-      ...(repeat === 'weekly' && until ? { until } : {}),
+      ...(repeat !== 'none' && until ? { until } : {}),
     };
     dispatch(event ? { type: 'event/update', id: event.id, draft } : { type: 'event/add', draft });
     onClose();
@@ -180,8 +180,11 @@ export function EventForm({
           </Field>
         </div>
 
-        {repeat === 'weekly' && (
-          <Field label="Last date (optional)" hint={error(errors.until) ?? 'For example, the end of the semester.'}>
+        {repeat !== 'none' && (
+          <Field
+            label="Last date (optional)"
+            hint={error(errors.until) ?? (repeat === 'weekly' ? 'For example, the end of the semester.' : undefined)}
+          >
             {(id) => (
               <input id={id} type="date" className={inputClass} value={until} onChange={(e) => setUntil(e.target.value)} />
             )}

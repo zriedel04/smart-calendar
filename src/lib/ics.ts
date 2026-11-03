@@ -1,4 +1,4 @@
-import { addDays, weekdayOf, type ISODate } from './dates';
+import { addDays, daysBetween, weekdayOf, type ISODate } from './dates';
 import type { EventRepeat } from './availability';
 import type { Minutes } from './time';
 
@@ -223,23 +223,48 @@ function toEntries(props: Property[]): IcsEntry[] {
     if (k && v) rule[k.toUpperCase()] = v.toUpperCase();
   }
   if (rule.INTERVAL && rule.INTERVAL !== '1') return [base];
-  const until = rule.UNTIL ? parseMoment(rule.UNTIL)?.date : undefined;
-  const withUntil = until ? { until } : {};
+  if (rule.FREQ !== 'YEARLY' && rule.FREQ !== 'WEEKLY') return [base];
 
-  if (rule.FREQ === 'YEARLY') return [{ ...base, repeat: 'yearly', ...withUntil }];
-  if (rule.FREQ !== 'WEEKLY') return [base];
+  // Repeat rules describe dates in the entry's own time zone. `shift` is how many days converting
+  // the start time to this device's zone moved it (for example, Monday 1am UTC is Sunday evening in Phoenix).
+  const sourceDate = `${startProp.value.slice(0, 4)}-${startProp.value.slice(4, 6)}-${startProp.value.slice(6, 8)}`;
+  const shift = daysBetween(sourceDate, start.date);
+  const toLocal = (date: ISODate) => addDays(date, shift);
 
-  const days = (rule.BYDAY ?? '')
+  const byDay = (rule.BYDAY ?? '')
     .split(',')
     .map((d) => ICS_WEEKDAYS[d.slice(-2)])
     .filter((d): d is number => d !== undefined);
-  if (days.length <= 1) return [{ ...base, repeat: 'weekly', ...withUntil, ...firstOn(base.date, days[0]) }];
-  return days.map((weekday) => ({ ...base, repeat: 'weekly' as const, ...withUntil, ...firstOn(base.date, weekday) }));
+  const weekdays = rule.FREQ === 'WEEKLY' && byDay.length > 0 ? byDay : [weekdayOf(sourceDate)];
+
+  // The last date the series can happen on, from UNTIL or from COUNT.
+  let until: ISODate | undefined = rule.UNTIL ? parseMoment(rule.UNTIL)?.date : undefined;
+  const count = rule.COUNT ? Number(rule.COUNT) : NaN;
+  if (!until && Number.isInteger(count) && count > 0) {
+    if (rule.FREQ === 'YEARLY') {
+      until = toLocal(`${Number(sourceDate.slice(0, 4)) + count - 1}${sourceDate.slice(4)}`);
+    } else {
+      let last = sourceDate;
+      let seen = 0;
+      for (let d = sourceDate; seen < count; d = addDays(d, 1)) {
+        if (weekdays.includes(weekdayOf(d))) {
+          seen++;
+          last = d;
+        }
+      }
+      until = toLocal(last);
+    }
+  }
+  const withUntil = until ? { until } : {};
+
+  if (rule.FREQ === 'YEARLY') return [{ ...base, repeat: 'yearly', ...withUntil }];
+  return weekdays.map((weekday) => {
+    const date = toLocal(firstOn(sourceDate, weekday));
+    return { ...base, repeat: 'weekly' as const, ...withUntil, date, endDate: date };
+  });
 }
 
 /** The first date on or after `from` that falls on `weekday`. */
-function firstOn(from: ISODate, weekday: number | undefined): { date: ISODate; endDate: ISODate } {
-  if (weekday === undefined) return { date: from, endDate: from };
-  const date = addDays(from, (weekday - weekdayOf(from) + 7) % 7);
-  return { date, endDate: date };
+function firstOn(from: ISODate, weekday: number): ISODate {
+  return addDays(from, (weekday - weekdayOf(from) + 7) % 7);
 }

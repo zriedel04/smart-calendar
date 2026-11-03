@@ -78,4 +78,19 @@ describe('parseIcs', () => {
   it('ignores text that is not a calendar', () => {
     expect(parseIcs('hello world')).toEqual([]);
   });
+
+  it('ends a series after COUNT occurrences', () => {
+    const [weekly] = parseIcs(calendar('UID:w\r\nSUMMARY:Workshop\r\nDTSTART:20261103T100000\r\nDTEND:20261103T110000\r\nRRULE:FREQ=WEEKLY;COUNT=2'));
+    expect(weekly).toMatchObject({ repeat: 'weekly', until: '2026-11-10' });
+    const mwf = parseIcs(calendar('UID:m\r\nSUMMARY:Lab\r\nDTSTART:20261102T100000\r\nDTEND:20261102T110000\r\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=4'));
+    expect(mwf.map((e) => e.until)).toEqual(['2026-11-09', '2026-11-09', '2026-11-09']);
+    const [yearly] = parseIcs(calendar('UID:y\r\nSUMMARY:Fair\r\nDTSTART;VALUE=DATE:20261001\r\nRRULE:FREQ=YEARLY;COUNT=3'));
+    expect(yearly?.until).toBe('2028-10-01');
+  });
+
+  it('applies BYDAY in the entry\'s own time zone before converting', () => {
+    // Monday 1am UTC is Sunday 6pm in Phoenix, so a weekly Monday (UTC) entry happens on Sundays here.
+    const [entry] = parseIcs(calendar('UID:z\r\nSUMMARY:Call\r\nDTSTART:20261109T010000Z\r\nDTEND:20261109T020000Z\r\nRRULE:FREQ=WEEKLY;BYDAY=MO'));
+    expect(entry).toMatchObject({ date: '2026-11-08', start: 18 * 60, repeat: 'weekly' });
+  });
 });

@@ -38,6 +38,9 @@ export function eventTime(event: CalendarEvent): string {
 export function eventRepeatLabel(event: CalendarEvent): string {
   const until = event.until ? ` until ${formatDate(event.until, { month: 'short', day: 'numeric' })}` : '';
   if (event.repeat === 'weekly') return `Every ${WEEKDAY_NAMES[weekdayOf(event.date)]}${until}`;
-  if (event.repeat === 'yearly') return `Every year on ${formatDate(event.date, { month: 'short', day: 'numeric' })}`;
+  if (event.repeat === 'yearly') {
+    const last = event.until ? ` until ${event.until.slice(0, 4)}` : '';
+    return `Every year on ${formatDate(event.date, { month: 'short', day: 'numeric' })}${last}`;
+  }
   return formatDate(event.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
