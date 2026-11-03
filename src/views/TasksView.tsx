@@ -26,10 +26,12 @@ function finishLabel(finishDate: ISODate, today: ISODate): string {
 export function TasksView({
   plan,
   onAddTask,
+  onAddMany,
   onEditTask,
 }: {
   plan: Plan;
   onAddTask: () => void;
+  onAddMany: () => void;
   onEditTask: (task: Task) => void;
 }) {
   const { data, dispatch } = useStore();
@@ -64,9 +66,12 @@ export function TasksView({
             {open.length ? `${open.length} open · ${formatDuration(totalLeft)} of work left` : 'Nothing open'}
           </p>
         </div>
-        <Button variant="primary" onClick={onAddTask}>
-          <Plus className="size-4" /> Add task
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={onAddMany}>Add several</Button>
+          <Button variant="primary" onClick={onAddTask}>
+            <Plus className="size-4" /> Add task
+          </Button>
+        </div>
       </div>
 
       {open.length === 0 && (

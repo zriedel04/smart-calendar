@@ -140,11 +140,13 @@ export function Modal({
   onClose,
   children,
   footer,
+  wide = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  wide?: boolean;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -203,7 +205,10 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex max-h-[90dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-md sm:rounded-2xl dark:bg-slate-900"
+        className={cx(
+          'relative flex max-h-[90dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900',
+          wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
+        )}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <h2 id={titleId} className="text-base font-semibold text-slate-900 dark:text-white">
