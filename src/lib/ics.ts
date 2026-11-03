@@ -127,7 +127,7 @@ const ICS_WEEKDAYS: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4
  * repeating series are left out. Weekly entries on several days (a Mon/Wed/Fri class) become
  * one weekly entry per day. Repeat rules other than weekly and yearly are imported as a single date.
  */
-export function parseIcs(text: string): IcsEntry[] {
+export function parseIcs(text: string, now: Date = new Date()): IcsEntry[] {
   const lines = text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
   const entries: IcsEntry[] = [];
   let props: Property[] | null = null;
@@ -148,7 +148,7 @@ export function parseIcs(text: string): IcsEntry[] {
     if (upper.startsWith('END:')) {
       if (nested > 0) nested--;
       else {
-        entries.push(...toEntries(props));
+        entries.push(...toEntries(props, now));
         props = null;
       }
       continue;
@@ -161,7 +161,7 @@ export function parseIcs(text: string): IcsEntry[] {
   return entries;
 }
 
-function toEntries(props: Property[]): IcsEntry[] {
+function toEntries(props: Property[], now: Date): IcsEntry[] {
   const get = (name: string) => props.find((p) => p.name === name);
   if (get('RECURRENCE-ID')) return [];
   if (get('STATUS')?.value.trim().toUpperCase() === 'CANCELLED') return [];
@@ -225,26 +225,42 @@ function toEntries(props: Property[]): IcsEntry[] {
   if (rule.INTERVAL && rule.INTERVAL !== '1') return [base];
   if (rule.FREQ !== 'YEARLY' && rule.FREQ !== 'WEEKLY') return [base];
 
-  // Repeat rules describe dates in the entry's own time zone. `shift` is how many days converting
-  // the start time to this device's zone moved it (for example, Monday 1am UTC is Sunday evening in Phoenix).
+  // Selectors the app can't represent, such as "the 4th Thursday of November", keep just the first date
+  // rather than guessing at a pattern. A month or day that only restates the start date is fine.
   const sourceDate = `${startProp.value.slice(0, 4)}-${startProp.value.slice(4, 6)}-${startProp.value.slice(6, 8)}`;
-  const shift = daysBetween(sourceDate, start.date);
-  const toLocal = (date: ISODate) => addDays(date, shift);
+  const restatesStart =
+    (!rule.BYMONTH || Number(rule.BYMONTH) === Number(sourceDate.slice(5, 7))) &&
+    (!rule.BYMONTHDAY || Number(rule.BYMONTHDAY) === Number(sourceDate.slice(8, 10)));
+  const unsupported =
+    !restatesStart ||
+    ['BYYEARDAY', 'BYWEEKNO', 'BYSETPOS', 'BYHOUR', 'BYMINUTE'].some((k) => rule[k]) ||
+    (rule.FREQ === 'YEARLY' && rule.BYDAY) ||
+    (rule.FREQ === 'WEEKLY' && rule.BYMONTH);
+  if (unsupported) return [base];
+
+  // Repeat rules describe dates and times in the entry's own time zone. Each occurrence is converted
+  // to this device's zone on its own, since daylight saving can change the gap between the two zones.
+  const zoned = !allDay && (startProp.value.trim().toUpperCase().endsWith('Z') || Boolean(startProp.params.TZID));
+  const timePart = startProp.value.trim().slice(8);
+  const localAt = (date: ISODate): Moment =>
+    zoned ? (parseMoment(date.replace(/-/g, '') + timePart, startProp.params.TZID) ?? { date, minutes: null }) : { date, minutes: start.minutes };
+  const length = endMinutes - startMinutes;
 
   const byDay = (rule.BYDAY ?? '')
     .split(',')
     .map((d) => ICS_WEEKDAYS[d.slice(-2)])
     .filter((d): d is number => d !== undefined);
   const weekdays = rule.FREQ === 'WEEKLY' && byDay.length > 0 ? byDay : [weekdayOf(sourceDate)];
+  const nextOccurrence = (date: ISODate): ISODate =>
+    rule.FREQ === 'YEARLY' ? `${Number(date.slice(0, 4)) + 1}${sourceDate.slice(4)}` : addDays(date, 7);
 
-  // The last date the series can happen on, from UNTIL or from COUNT.
+  // The last date the series can happen on, from UNTIL or from COUNT, in this device's zone.
   let until: ISODate | undefined = rule.UNTIL ? parseMoment(rule.UNTIL)?.date : undefined;
   const count = rule.COUNT ? Number(rule.COUNT) : NaN;
   if (!until && Number.isInteger(count) && count > 0) {
-    if (rule.FREQ === 'YEARLY') {
-      until = toLocal(`${Number(sourceDate.slice(0, 4)) + count - 1}${sourceDate.slice(4)}`);
-    } else {
-      let last = sourceDate;
+    let last = sourceDate;
+    if (rule.FREQ === 'YEARLY') last = `${Number(sourceDate.slice(0, 4)) + count - 1}${sourceDate.slice(4)}`;
+    else {
       let seen = 0;
       for (let d = sourceDate; seen < count; d = addDays(d, 1)) {
         if (weekdays.includes(weekdayOf(d))) {
@@ -252,16 +268,45 @@ function toEntries(props: Property[]): IcsEntry[] {
           last = d;
         }
       }
-      until = toLocal(last);
     }
+    until = localAt(last).date;
   }
-  const withUntil = until ? { until } : {};
 
-  if (rule.FREQ === 'YEARLY') return [{ ...base, repeat: 'yearly', ...withUntil }];
-  return weekdays.map((weekday) => {
-    const date = toLocal(firstOn(sourceDate, weekday));
-    return { ...base, repeat: 'weekly' as const, ...withUntil, date, endDate: date };
-  });
+  // Without an end, look two years past today for daylight-saving changes; the last stretch then repeats forever.
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const horizon = addDays(sourceDate > today ? sourceDate : today, 731);
+  const repeat: EventRepeat = rule.FREQ === 'YEARLY' ? 'yearly' : 'weekly';
+  const entries: IcsEntry[] = [];
+
+  for (const weekday of weekdays) {
+    // Runs of occurrences that land at the same local time become one repeating entry each.
+    const runs: { first: ISODate; last: ISODate; start: Minutes; end: Minutes }[] = [];
+    let occurrence = rule.FREQ === 'YEARLY' ? sourceDate : firstOn(sourceDate, weekday);
+    for (let i = 0; i < 2000; i++, occurrence = nextOccurrence(occurrence)) {
+      if (!until && occurrence > horizon) break;
+      const local = localAt(occurrence);
+      if (until && local.date > until) break;
+      const startAt = local.minutes ?? 0;
+      const endAt = allDay ? 0 : Math.min(startAt + length, 24 * 60);
+      const run = runs[runs.length - 1];
+      if (run && run.start === startAt && run.end === endAt) run.last = local.date;
+      else runs.push({ first: local.date, last: local.date, start: startAt, end: endAt });
+    }
+    runs.forEach((run, i) => {
+      const isLast = i === runs.length - 1;
+      const runUntil = isLast ? until : run.last;
+      const span = daysBetween(base.date, base.endDate);
+      entries.push({
+        ...base,
+        repeat,
+        date: run.first,
+        endDate: addDays(run.first, span),
+        ...(allDay ? {} : { start: run.start, end: run.end }),
+        ...(runUntil ? { until: runUntil } : {}),
+      });
+    });
+  }
+  return entries;
 }
 
 /** The first date on or after `from` that falls on `weekday`. */

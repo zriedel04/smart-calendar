@@ -46,16 +46,17 @@ export function toTaskDraft(entry: IcsEntry, estimateMinutes: number): TaskDraft
 }
 
 export function toEventDrafts(entry: IcsEntry): EventDraft[] {
-  const base = { title: entry.title, repeat: entry.repeat, sourceId: entry.uid, ...(entry.until ? { until: entry.until } : {}) };
+  const base = { title: entry.title, repeat: entry.repeat, sourceId: entry.uid };
+  const untilFor = (dayIndex: number) => (entry.until ? { until: addDays(entry.until, dayIndex) } : {});
   if (entry.allDay) {
     const kind = /birthday|\bbday\b/i.test(entry.title) ? ('birthday' as const) : ('other' as const);
+    // Each day of a multi-day entry becomes its own event; a repeating one repeats every day of its span.
     const dates: ISODate[] = [];
     for (let d = entry.date; d <= entry.endDate && dates.length < MAX_SPAN_DAYS; d = addDays(d, 1)) dates.push(d);
-    if (entry.repeat !== 'none') dates.splice(1);
-    return dates.map((date) => ({ ...base, date, start: 0, end: 24 * 60, allDay: true, blocksWork: false, kind }));
+    return dates.map((date, i) => ({ ...base, ...untilFor(i), date, start: 0, end: 24 * 60, allDay: true, blocksWork: false, kind }));
   }
   const start = Math.min(entry.start, 24 * 60 - 15);
   // A timed entry with no length still needs one to show up as a block of time.
   const end = entry.end > start ? entry.end : Math.min(start + 60, 24 * 60);
-  return [{ ...base, date: entry.date, start, end, allDay: false, blocksWork: true, kind: 'busy' }];
+  return [{ ...base, ...untilFor(0), date: entry.date, start, end, allDay: false, blocksWork: true, kind: 'busy' }];
 }

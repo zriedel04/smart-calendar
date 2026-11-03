@@ -36,4 +36,15 @@ describe('calendar import', () => {
     const [e] = toEventDrafts(entry({ start: 600, end: 600 }));
     expect(e).toMatchObject({ start: 600, end: 660, blocksWork: true });
   });
+
+  it('repeats every day of a multi-day yearly entry', () => {
+    const trip = toEventDrafts(
+      entry({ allDay: true, date: '2026-12-19', endDate: '2026-12-21', repeat: 'yearly', until: '2028-12-19' }),
+    );
+    expect(trip.map((e) => [e.date, e.repeat, e.until])).toEqual([
+      ['2026-12-19', 'yearly', '2028-12-19'],
+      ['2026-12-20', 'yearly', '2028-12-20'],
+      ['2026-12-21', 'yearly', '2028-12-21'],
+    ]);
+  });
 });

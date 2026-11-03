@@ -93,4 +93,29 @@ describe('parseIcs', () => {
     const [entry] = parseIcs(calendar('UID:z\r\nSUMMARY:Call\r\nDTSTART:20261109T010000Z\r\nDTEND:20261109T020000Z\r\nRRULE:FREQ=WEEKLY;BYDAY=MO'));
     expect(entry).toMatchObject({ date: '2026-11-08', start: 18 * 60, repeat: 'weekly' });
   });
+
+  it('follows daylight saving changes between the entry\'s zone and this one', () => {
+    // 9am New York is 6am in Phoenix until Nov 1 (EDT), then 7am (EST), then 6am again from Mar 14 to Nov 7, 2027.
+    const entries = parseIcs(
+      calendar('UID:dst\r\nSUMMARY:Standup\r\nDTSTART;TZID=America/New_York:20261026T090000\r\nDTEND;TZID=America/New_York:20261026T100000\r\nRRULE:FREQ=WEEKLY'),
+      new Date(2026, 10, 2),
+    );
+    expect(entries.slice(0, 3).map((e) => [e.date, e.start, e.end, e.until])).toEqual([
+      ['2026-10-26', 6 * 60, 7 * 60, '2026-10-26'],
+      ['2026-11-02', 7 * 60, 8 * 60, '2027-03-08'],
+      ['2027-03-15', 6 * 60, 7 * 60, '2027-11-01'],
+    ]);
+    expect(entries[entries.length - 1]?.until).toBeUndefined();
+  });
+
+  it('keeps one date for yearly rules it cannot represent, but allows ones that restate the start', () => {
+    const [thanksgiving] = parseIcs(
+      calendar('UID:t\r\nSUMMARY:Thanksgiving\r\nDTSTART;VALUE=DATE:20261126\r\nRRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=4TH'),
+    );
+    expect(thanksgiving?.repeat).toBe('none');
+    const [birthday] = parseIcs(
+      calendar('UID:b\r\nSUMMARY:Sam\r\nDTSTART;VALUE=DATE:20261112\r\nRRULE:FREQ=YEARLY;BYMONTH=11;BYMONTHDAY=12'),
+    );
+    expect(birthday?.repeat).toBe('yearly');
+  });
 });
