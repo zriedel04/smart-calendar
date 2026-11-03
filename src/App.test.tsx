@@ -57,6 +57,24 @@ describe('App', () => {
     expect(screen.getAllByText(/usually 12pm – 6pm/)).toHaveLength(1);
   });
 
+  it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
+    const user = userEvent.setup();
+    const { container } = renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    expect(container.closest('[inert]')).not.toBeNull();
+
+    const addButton = within(dialog).getByRole('button', { name: 'Add task' });
+    addButton.focus();
+    await user.tab();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(addButton);
+
+    await user.keyboard('{Escape}');
+    expect(container.closest('[inert]')).toBeNull();
+  });
+
   it('remembers data after a reload', async () => {
     const user = userEvent.setup();
     const { unmount } = renderApp();

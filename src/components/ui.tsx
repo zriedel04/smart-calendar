@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { PRIORITY_LABEL, type Priority } from '../lib/priority';
+import { createPortal } from 'react-dom';
 import { cx } from './cx';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -147,21 +148,55 @@ export function Modal({
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const focusables = () =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      // Keep Tab and Shift+Tab cycling inside the dialog.
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !panelRef.current?.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    // Everything behind the dialog becomes inert: not focusable, not clickable, hidden from screen readers.
+    const background = Array.from(document.body.children).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement && el !== layerRef.current && !el.hasAttribute('inert'),
+    );
+    background.forEach((el) => el.setAttribute('inert', ''));
+
     document.addEventListener('keydown', onKey);
     const previous = document.activeElement as HTMLElement | null;
-    const focusable = panelRef.current?.querySelector<HTMLElement>('input, textarea, select, button');
-    focusable?.focus();
+    focusables()[0]?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
+      background.forEach((el) => el.removeAttribute('inert'));
       previous?.focus?.();
     };
   }, [onClose]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
+  return createPortal(
+    <div ref={layerRef} className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
@@ -190,7 +225,8 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
