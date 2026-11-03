@@ -18,6 +18,12 @@ export function StoreProvider({
     adapter.save(data);
   }, [adapter, data]);
 
+  // Pick up changes saved by another open tab, so this tab never writes over them with stale data.
+  useEffect(
+    () => adapter.subscribe?.((next) => dispatch({ type: 'data/replace', data: next })),
+    [adapter],
+  );
+
   const value = useMemo(() => ({ data, dispatch }), [data]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

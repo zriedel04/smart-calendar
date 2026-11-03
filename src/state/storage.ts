@@ -11,6 +11,8 @@ import type { AppData } from './types';
 export interface StorageAdapter {
   load(): AppData | null;
   save(data: AppData): void;
+  /** Calls `onChange` when the data is changed somewhere else, such as another open tab. Returns an unsubscribe function. */
+  subscribe?(onChange: (data: AppData) => void): () => void;
 }
 
 export const STORAGE_KEY = 'smart-calendar:data';
@@ -31,6 +33,20 @@ export function createLocalStorageAdapter(key: string = STORAGE_KEY): StorageAda
       } catch {
         // Storage can be full or blocked (private browsing). The app keeps working in memory.
       }
+    },
+    subscribe(onChange) {
+      if (typeof window === 'undefined') return () => {};
+      // The storage event fires in every other tab of this site when one tab saves.
+      const onStorage = (event: StorageEvent) => {
+        if (event.key !== key || event.newValue === null) return;
+        try {
+          onChange(parseAppData(event.newValue));
+        } catch {
+          // Ignore values that aren't valid app data.
+        }
+      };
+      window.addEventListener('storage', onStorage);
+      return () => window.removeEventListener('storage', onStorage);
     },
   };
 }

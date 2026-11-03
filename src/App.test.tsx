@@ -1,8 +1,10 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { StoreProvider } from './state/StoreProvider';
+import { createSampleData } from './state/defaults';
+import { STORAGE_KEY } from './state/storage';
 
 function renderApp() {
   return render(
@@ -73,6 +75,27 @@ describe('App', () => {
 
     await user.keyboard('{Escape}');
     expect(container.closest('[inert]')).toBeNull();
+  });
+
+  it('picks up changes saved in another tab instead of overwriting them', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    expect(screen.getByText('No tasks yet')).toBeInTheDocument();
+
+    // Another tab saves sample data.
+    const newValue = JSON.stringify(createSampleData('2026-11-02'));
+    localStorage.setItem(STORAGE_KEY, newValue);
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, newValue }));
+    });
+    expect(within(todaysList()).getByText('Reply to internship recruiter')).toBeInTheDocument();
+
+    // An edit here keeps the other tab's tasks.
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    fireEvent.change(screen.getByLabelText('Monday block 1 end'), { target: { value: '16:00' } });
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.tasks).toHaveLength(6);
+    expect(saved.weeklyHours[1]).toEqual([{ start: 720, end: 960 }]);
   });
 
   it('remembers data after a reload', async () => {
