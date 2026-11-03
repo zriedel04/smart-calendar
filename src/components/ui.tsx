@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import {
+  createElement,
   useEffect,
   useId,
   useRef,
@@ -8,7 +9,9 @@ import {
 } from 'react';
 import { PRIORITY_LABEL, type Priority } from '../lib/priority';
 import { createPortal } from 'react-dom';
+import type { CalendarEvent } from '../lib/availability';
 import { cx } from './cx';
+import { eventIcon } from './eventStyles';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -253,4 +256,8 @@ export function EmptyState({
       {children && <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{children}</div>}
     </div>
   );
+}
+
+export function EventIcon({ event, className }: { event: CalendarEvent; className?: string }) {
+  return createElement(eventIcon(event), { className: cx('shrink-0', className), 'aria-hidden': true });
 }

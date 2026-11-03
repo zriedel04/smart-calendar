@@ -71,4 +71,37 @@ describe('availability', () => {
     const r = rules({ events: [event({ start: h(8), end: h(9) })] });
     expect(capacityOn(r, '2026-11-03')).toBe(h(6));
   });
+
+  it('repeats yearly events on the same date each year', () => {
+    const birthday = event({ date: '2025-03-14', repeat: 'yearly', allDay: true, kind: 'birthday' });
+    expect(eventOccursOn(birthday, '2026-03-14')).toBe(true);
+    expect(eventOccursOn(birthday, '2026-03-15')).toBe(false);
+    expect(eventOccursOn(birthday, '2024-03-14')).toBe(false);
+  });
+
+  it('moves a Feb 29 birthday to Feb 28 outside leap years', () => {
+    const leap = event({ date: '2024-02-29', repeat: 'yearly', allDay: true });
+    expect(eventOccursOn(leap, '2025-02-28')).toBe(true);
+    expect(eventOccursOn(leap, '2028-02-29')).toBe(true);
+    expect(eventOccursOn(leap, '2028-02-28')).toBe(false);
+  });
+
+  it('does not take all-day events out of work hours unless asked to', () => {
+    const birthday = event({ date: '2026-11-03', allDay: true, kind: 'birthday' });
+    expect(capacityOn(rules({ events: [birthday] }), '2026-11-03')).toBe(h(6));
+    const trip = event({ date: '2026-11-03', allDay: true, kind: 'plan', blocksWork: true });
+    expect(capacityOn(rules({ events: [trip] }), '2026-11-03')).toBe(0);
+  });
+
+  it('lets a timed plan leave work hours alone', () => {
+    const lunch = event({ kind: 'plan', start: h(12), end: h(13), blocksWork: false });
+    expect(capacityOn(rules({ events: [lunch] }), '2026-11-03')).toBe(h(6));
+    expect(capacityOn(rules({ events: [{ ...lunch, blocksWork: true }] }), '2026-11-03')).toBe(h(5));
+  });
+
+  it('stops a repeating event after its last date', () => {
+    const lecture = event({ date: '2026-11-03', repeat: 'weekly', until: '2026-11-17' });
+    expect(eventOccursOn(lecture, '2026-11-17')).toBe(true);
+    expect(eventOccursOn(lecture, '2026-11-24')).toBe(false);
+  });
 });

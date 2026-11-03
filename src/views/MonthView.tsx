@@ -1,11 +1,13 @@
-import { Check, ChevronLeft, ChevronRight, Flag } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Flag, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { eventKind, eventsOn, type CalendarEvent } from '../lib/availability';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
 import { priorityOf, type Priority } from '../lib/priority';
 import { formatDuration } from '../lib/time';
 import { cx } from '../components/cx';
+import { EVENT_CHIP, EVENT_DOT, eventTime } from '../components/eventStyles';
 import { PRIORITY_DOT } from '../components/styles';
-import { Button, Card } from '../components/ui';
+import { Button, Card, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
 import { isTaskComplete, type Plan } from '../state/planner';
 import type { Task } from '../state/types';
@@ -37,10 +39,14 @@ export function MonthView({
   plan,
   onEditTask,
   onEditDay,
+  onEditEvent,
+  onAddEvent,
 }: {
   plan: Plan;
   onEditTask: (task: Task) => void;
   onEditDay: (date: ISODate) => void;
+  onEditEvent: (event: CalendarEvent) => void;
+  onAddEvent: (date: ISODate) => void;
 }) {
   const { data, dispatch } = useStore();
   const { today } = plan;
@@ -90,6 +96,7 @@ export function MonthView({
   const days: ISODate[] = [];
   for (let d = gridStart; d < nextMonth || days.length % 7 !== 0; d = addDays(d, 1)) days.push(d);
   const selectedEntries = entriesFor(selected);
+  const selectedEvents = eventsOn(data.events, selected);
 
   return (
     <div className="space-y-4">
@@ -132,7 +139,10 @@ export function MonthView({
             const inMonth = date >= month && date < nextMonth;
             const isToday = date === today;
             const entries = entriesFor(date);
-            const shown = entries.slice(0, 3);
+            const events = eventsOn(data.events, date);
+            const shownEvents = events.slice(0, 3);
+            const shown = entries.slice(0, 3 - shownEvents.length);
+            const more = events.length + entries.length - shownEvents.length - shown.length;
             return (
               <button
                 key={date}
@@ -160,7 +170,10 @@ export function MonthView({
                 </span>
                 {/* Phones: colored dots. Larger screens: titles. */}
                 <span className="flex flex-wrap gap-0.5 sm:hidden">
-                  {entries.slice(0, 4).map((e) => (
+                  {events.slice(0, 4).map((e) => (
+                    <span key={e.id} className={cx('size-1.5 rounded-full', EVENT_DOT[eventKind(e)])} />
+                  ))}
+                  {entries.slice(0, Math.max(0, 4 - events.length)).map((e) => (
                     <span
                       key={e.key}
                       className={cx('size-1.5 rounded-full', e.done ? 'bg-slate-300 dark:bg-slate-600' : PRIORITY_DOT[e.priority])}
@@ -168,6 +181,18 @@ export function MonthView({
                   ))}
                 </span>
                 <span className="hidden w-full flex-col gap-0.5 sm:flex">
+                  {shownEvents.map((e) => (
+                    <span
+                      key={e.id}
+                      className={cx(
+                        'flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] leading-tight',
+                        EVENT_CHIP[eventKind(e)],
+                      )}
+                    >
+                      <EventIcon event={e} className="size-2.5" />
+                      <span className="truncate">{e.title}</span>
+                    </span>
+                  ))}
                   {shown.map((e) => (
                     <span
                       key={e.key}
@@ -188,9 +213,7 @@ export function MonthView({
                       <span className="truncate">{e.task.title}</span>
                     </span>
                   ))}
-                  {entries.length > shown.length && (
-                    <span className="px-1 text-[11px] text-slate-500 dark:text-slate-400">+{entries.length - shown.length} more</span>
-                  )}
+                  {more > 0 && <span className="px-1 text-[11px] text-slate-500 dark:text-slate-400">+{more} more</span>}
                 </span>
               </button>
             );
@@ -203,15 +226,37 @@ export function MonthView({
           <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
             {formatDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
           </h2>
-          {selected >= today && (
-            <Button size="sm" variant="ghost" onClick={() => onEditDay(selected)}>
-              Change hours
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" onClick={() => onAddEvent(selected)}>
+              <Plus className="size-4" /> Event
             </Button>
-          )}
+            {selected >= today && (
+              <Button size="sm" variant="ghost" onClick={() => onEditDay(selected)}>
+                Change hours
+              </Button>
+            )}
+          </div>
         </div>
-        {selectedEntries.length === 0 ? (
+        {selectedEvents.length > 0 && (
+          <ul className="mb-1 space-y-1 px-1">
+            {selectedEvents.map((e) => (
+              <li key={e.id}>
+                <button
+                  type="button"
+                  onClick={() => onEditEvent(e)}
+                  className={cx('flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm', EVENT_CHIP[eventKind(e)])}
+                >
+                  <EventIcon event={e} className="size-4" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{e.title}</span>
+                  <span className="shrink-0 text-xs tabular-nums opacity-80">{eventTime(e)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {selectedEntries.length === 0 && selectedEvents.length === 0 ? (
           <p className="px-2 pb-3 text-sm text-slate-500 dark:text-slate-400">Nothing on this day.</p>
-        ) : (
+        ) : selectedEntries.length === 0 ? null : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {selectedEntries.map((e) => {
               const canTick = e.kind === 'work' && selected === today;

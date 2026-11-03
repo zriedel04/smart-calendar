@@ -4,7 +4,7 @@ import type { TimeRange } from '../lib/time';
 import { createId } from './ids';
 import type { AppData, Task } from './types';
 
-export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes'>;
+export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes' | 'sourceId'>;
 export type EventDraft = Omit<CalendarEvent, 'id'>;
 
 export type Action =
@@ -20,6 +20,7 @@ export type Action =
   | { type: 'event/add'; draft: EventDraft }
   | { type: 'event/update'; id: string; draft: EventDraft }
   | { type: 'event/delete'; id: string }
+  | { type: 'import/add'; tasks: TaskDraft[]; events: EventDraft[] }
   | { type: 'data/replace'; data: AppData };
 
 export function reducer(state: AppData, action: Action): AppData {
@@ -90,10 +91,20 @@ export function reducer(state: AppData, action: Action): AppData {
     case 'event/update':
       return {
         ...state,
-        events: state.events.map((e) => (e.id === action.id ? { ...action.draft, id: e.id } : e)),
+        events: state.events.map((e) =>
+          e.id === action.id ? { ...action.draft, id: e.id, sourceId: action.draft.sourceId ?? e.sourceId } : e,
+        ),
       };
     case 'event/delete':
       return { ...state, events: state.events.filter((e) => e.id !== action.id) };
+    case 'import/add': {
+      const createdAt = new Date().toISOString();
+      return {
+        ...state,
+        tasks: [...state.tasks, ...action.tasks.map((draft) => ({ ...draft, id: createId(), createdAt }))],
+        events: [...state.events, ...action.events.map((draft) => ({ ...draft, id: createId() }))],
+      };
+    }
     case 'data/replace':
       return action.data;
   }

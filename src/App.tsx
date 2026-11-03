@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'r
 import { BulkTaskForm } from './components/BulkTaskForm';
 import { DayHoursDialog } from './components/DayHoursDialog';
 import { EventForm } from './components/EventForm';
+import { ImportCalendarDialog } from './components/ImportCalendarDialog';
 import { TaskForm } from './components/TaskForm';
 import { cx } from './components/cx';
 import type { CalendarEvent } from './lib/availability';
@@ -32,7 +33,8 @@ type Dialog =
   | { kind: 'task'; task?: Task }
   | { kind: 'bulk' }
   | { kind: 'day'; date?: ISODate }
-  | { kind: 'event'; event?: CalendarEvent }
+  | { kind: 'event'; event?: CalendarEvent; date?: ISODate }
+  | { kind: 'import' }
   | null;
 
 function tabFromHash(): Tab {
@@ -65,6 +67,8 @@ export default function App() {
   const editTask = (task: Task) => setDialog({ kind: 'task', task });
   const editDay = (date?: ISODate) => setDialog({ kind: 'day', date });
   const editEvent = (event?: CalendarEvent) => setDialog({ kind: 'event', event });
+  const addEventOn = (date: ISODate) => setDialog({ kind: 'event', date });
+  const importCalendar = () => setDialog({ kind: 'import' });
   const loadSample = () => {
     if (hasUserData(data) && !window.confirm('Replace your current tasks, hours and events with sample data?')) return;
     dispatch({ type: 'data/replace', data: createSampleData(today) });
@@ -117,10 +121,20 @@ export default function App() {
           />
         )}
         {tab === 'week' && <WeekView plan={plan} onEditDay={editDay} onEditTask={editTask} />}
-        {tab === 'month' && <MonthView plan={plan} onEditTask={editTask} onEditDay={editDay} />}
-        {tab === 'tasks' && <TasksView plan={plan} onAddTask={addTask} onAddMany={addMany} onEditTask={editTask} />}
+        {tab === 'month' && (
+          <MonthView plan={plan} onEditTask={editTask} onEditDay={editDay} onEditEvent={editEvent} onAddEvent={addEventOn} />
+        )}
+        {tab === 'tasks' && (
+          <TasksView plan={plan} onAddTask={addTask} onAddMany={addMany} onImport={importCalendar} onEditTask={editTask} />
+        )}
         {tab === 'schedule' && (
-          <ScheduleView today={today} onEditDay={editDay} onEditEvent={editEvent} onLoadSample={loadSample} />
+          <ScheduleView
+            today={today}
+            onEditDay={editDay}
+            onEditEvent={editEvent}
+            onImport={importCalendar}
+            onLoadSample={loadSample}
+          />
         )}
       </main>
 
@@ -138,7 +152,10 @@ export default function App() {
       {dialog?.kind === 'task' && <TaskForm task={dialog.task} today={today} onClose={close} onAddMany={addMany} />}
       {dialog?.kind === 'bulk' && <BulkTaskForm today={today} onClose={close} />}
       {dialog?.kind === 'day' && <DayHoursDialog date={dialog.date} today={today} onClose={close} />}
-      {dialog?.kind === 'event' && <EventForm event={dialog.event} today={today} onClose={close} />}
+      {dialog?.kind === 'event' && (
+        <EventForm event={dialog.event} defaultDate={dialog.date} today={today} onClose={close} />
+      )}
+      {dialog?.kind === 'import' && <ImportCalendarDialog today={today} onClose={close} />}
     </div>
   );
 }

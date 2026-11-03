@@ -1,11 +1,12 @@
-import { AlertTriangle, CalendarClock, Check, Clock, Coffee, PartyPopper, Plus, Sparkles } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Coffee, PartyPopper, Plus, Sparkles } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import { capacityOn, eventsOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { formatDate, relativeDayPhrase } from '../lib/dates';
 import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange } from '../lib/time';
 import { cx } from '../components/cx';
-import { Button, Card, EmptyState, PriorityBadge, ProgressBar } from '../components/ui';
+import { eventTime } from '../components/eventStyles';
+import { Button, Card, EmptyState, PriorityBadge, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
 import { isTaskComplete, remainingMinutes, type Plan } from '../state/planner';
 import type { Task } from '../state/types';
@@ -124,12 +125,12 @@ export function TodayView({
 
       {events.length > 0 && (
         <Card>
-          <h2 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Fixed events</h2>
+          <h2 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">On your calendar</h2>
           <ul className="space-y-1.5">
             {events.map((e) => (
               <li key={e.id} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                <CalendarClock className="size-4 text-slate-400" />
-                <span className="tabular-nums">{formatRange(e)}</span>
+                <EventIcon event={e} className="size-4 text-slate-400" />
+                <span className="tabular-nums">{eventTime(e)}</span>
                 <span className="font-medium text-slate-800 dark:text-slate-100">{e.title}</span>
               </li>
             ))}

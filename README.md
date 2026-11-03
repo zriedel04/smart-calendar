@@ -14,7 +14,11 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/month.png" alt="Month calendar with work crossed off" width="90%" />
+  <img src="docs/screenshots/month.png" alt="Month calendar with work, plans and birthdays" width="90%" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/import.png" alt="Importing Canvas assignments and classes from an .ics file" width="90%" />
 </p>
 
 ## Features
@@ -26,7 +30,8 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Add several tasks at once.** Enter a batch of assignments in one form.
 - **Re-plans instantly.** Change your hours, add a task, or tick something off and every day's list updates.
 - **Priorities at a glance.** Due today is **Urgent**, due within a week is **Needed**, anything later is **To do**, and missed due dates are **Overdue**.
-- **Fixed events.** Classes, shifts and appointments (one-time or weekly) are taken out of your work hours.
+- **Events, plans and birthdays.** Add classes, shifts, plans with friends and birthdays, timed or all day, one-time, weekly (with an end date, like the end of the semester) or yearly. Choose whether each one takes time away from work.
+- **Import from Canvas or any calendar.** Load an .ics file from Canvas, Google Calendar, Apple Calendar or Outlook. Assignments come in as tasks (you just add the hours), everything else as events, and you see a preview first. Importing the same file again won't add duplicates.
 - **Early warnings.** If a task can't be finished before it's due with your current hours, it's flagged as at risk.
 - **Unfinished work rolls over.** Anything you don't get to is rescheduled from the next day automatically.
 - **Works offline and installs like an app.** It's a PWA, so you can add it to your phone's home screen. Data stays in your browser, with JSON export and import for backups.
@@ -36,7 +41,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 
 The scheduler ([`src/lib/scheduler.ts`](src/lib/scheduler.ts)) is a pure function with no React or browser dependencies, so it's straightforward to test.
 
-1. **Work out each day's capacity.** For every date, take that day's hours (a one-day override if there is one, otherwise the weekday default), then cut out any fixed events ([`src/lib/availability.ts`](src/lib/availability.ts)). Today's capacity also drops by the time you've already ticked off, so checking something off never reshuffles the rest of today's list.
+1. **Work out each day's capacity.** For every date, take that day's hours (a one-day override if there is one, otherwise the weekday default), then cut out any events that block work ([`src/lib/availability.ts`](src/lib/availability.ts)). Today's capacity also drops by the time you've already ticked off, so checking something off never reshuffles the rest of today's list.
 2. **Sort the work by due date** (earliest first). Ties go to the smaller task, then the older one.
 3. **Fill each day to capacity**, starting today, walking the sorted list. A task that doesn't fit is split, and the rest carries over to the next day with free time. Slices under 15 minutes are skipped unless they finish the task, and the gap goes to a smaller task that fits.
 4. **Forecast each task's finish date** and flag any that land after their due date.
@@ -57,7 +62,7 @@ Because the plan is recomputed from your tasks, your hours and your logged work 
 
 ```
 src/
-  lib/          Pure logic: dates, time ranges, availability, priorities, the scheduler
+  lib/          Pure logic: dates, time ranges, availability, priorities, the scheduler, the .ics parser
   state/        App data types, reducer, local storage, and planFor() which connects data to the scheduler
   components/   Shared UI: buttons, cards, modals, task / event / hours forms
   views/        The screens: Today, Week, Month, Tasks, Schedule
@@ -99,7 +104,8 @@ To deploy your own copy, enable GitHub Pages under **Settings → Pages → Buil
 - Accounts and cloud sync so your phone and laptop share the same data
 - Logging part of a task (for example, 1 hour of a 2-hour block)
 - Recurring tasks
-- Importing events from Google Calendar
+- Live sync with a Canvas or Google Calendar feed link
+- Importing assignments from a screenshot
 - Optional time-blocking: suggested start times within your work hours
 
 ## License

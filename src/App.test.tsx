@@ -148,6 +148,61 @@ describe('App', () => {
     expect(screen.getByText('Finished')).toBeInTheDocument();
   });
 
+  it('adds a birthday from the month calendar without taking work time', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Thursday, November 12' }));
+    await user.click(screen.getByRole('button', { name: 'Event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add to your calendar' });
+    await user.click(within(dialog).getByRole('radio', { name: 'Birthday' }));
+    await user.type(within(dialog).getByLabelText('Name'), "Mom's birthday");
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+
+    expect(screen.getByRole('button', { name: /^Mom's birthday/ })).toHaveTextContent('All day');
+    const [saved] = JSON.parse(localStorage.getItem(STORAGE_KEY)!).events;
+    expect(saved).toMatchObject({ date: '2026-11-12', kind: 'birthday', allDay: true, repeat: 'yearly', blocksWork: false });
+  });
+
+  it('imports Canvas assignments as tasks and other entries as events, once', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT\r\nUID:event-assignment-1\r\nSUMMARY:Lab 5 report\r\nDTSTART:20261106T065900Z\r\nDTEND:20261106T065900Z\r\nEND:VEVENT',
+      'BEGIN:VEVENT\r\nUID:event-assignment-0\r\nSUMMARY:Old quiz\r\nDTSTART:20261001T065900Z\r\nDTEND:20261001T065900Z\r\nEND:VEVENT',
+      'BEGIN:VEVENT\r\nUID:class-1\r\nSUMMARY:Physics lecture\r\nDTSTART:20261103T130000\r\nDTEND:20261103T140000\r\nRRULE:FREQ=WEEKLY\r\nEND:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+    const file = () => new File([ics], 'canvas.ics', { type: 'text/calendar' });
+
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    let dialog = screen.getByRole('dialog', { name: 'Import a calendar' });
+    await user.upload(within(dialog).getByLabelText('Calendar file'), file());
+
+    // The past quiz is skipped and hidden; the assignment needs hours before importing.
+    expect(await within(dialog).findByText('Lab 5 report')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Old quiz')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Import "Physics lecture" as')).toHaveValue('event');
+    await user.click(within(dialog).getByRole('button', { name: 'Import 1 task and 1 event' }));
+    expect(within(dialog).getByText(/Add hours for the highlighted task/)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Hours for "Lab 5 report"'), '3');
+    await user.click(within(dialog).getByRole('button', { name: 'Import 1 task and 1 event' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Lab 5 report')).toBeInTheDocument();
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.tasks[0]).toMatchObject({ dueDate: '2026-11-05', estimateMinutes: 180 });
+    expect(saved.events[0]).toMatchObject({ title: 'Physics lecture', repeat: 'weekly', start: 780, end: 840 });
+
+    // Importing the same file again adds nothing.
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    dialog = screen.getByRole('dialog', { name: 'Import a calendar' });
+    await user.upload(within(dialog).getByLabelText('Calendar file'), file());
+    expect(await within(dialog).findByText(/already in your calendar or already over/)).toBeInTheDocument();
+  });
+
   it('remembers data after a reload', async () => {
     const user = userEvent.setup();
     const { unmount } = renderApp();

@@ -1,4 +1,4 @@
-import { Check, ListTodo, Plus, RotateCcw } from 'lucide-react';
+import { CalendarPlus, Check, ListTodo, Plus, RotateCcw } from 'lucide-react';
 import { relativeDayLabel, relativeDayPhrase, type ISODate } from '../lib/dates';
 import { PRIORITY_ORDER, priorityOf, type Priority } from '../lib/priority';
 import { compareTasks } from '../lib/scheduler';
@@ -27,11 +27,13 @@ export function TasksView({
   plan,
   onAddTask,
   onAddMany,
+  onImport,
   onEditTask,
 }: {
   plan: Plan;
   onAddTask: () => void;
   onAddMany: () => void;
+  onImport: () => void;
   onEditTask: (task: Task) => void;
 }) {
   const { data, dispatch } = useStore();
@@ -59,14 +61,17 @@ export function TasksView({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">Tasks</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {open.length ? `${open.length} open · ${formatDuration(totalLeft)} of work left` : 'Nothing open'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="ghost" onClick={onImport}>
+            <CalendarPlus className="size-4" /> Import
+          </Button>
           <Button onClick={onAddMany}>Add several</Button>
           <Button variant="primary" onClick={onAddTask}>
             <Plus className="size-4" /> Add task

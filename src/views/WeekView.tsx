@@ -1,4 +1,4 @@
-import { CalendarClock, Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { capacityOn, eventsOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
@@ -6,7 +6,8 @@ import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { PRIORITY_DOT } from '../components/styles';
-import { Button, ProgressBar } from '../components/ui';
+import { eventTime } from '../components/eventStyles';
+import { Button, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
 import type { Plan } from '../state/planner';
 import type { Task } from '../state/types';
@@ -141,8 +142,8 @@ export function WeekView({
                     <ul className="space-y-1">
                       {events.map((e) => (
                         <li key={e.id} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                          <CalendarClock className="size-3.5 shrink-0" />
-                          <span className="tabular-nums">{formatRange(e)}</span>
+                          <EventIcon event={e} className="size-3.5" />
+                          <span className="tabular-nums">{eventTime(e)}</span>
                           <span className="truncate">{e.title}</span>
                         </li>
                       ))}

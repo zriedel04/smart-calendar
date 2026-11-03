@@ -37,5 +37,7 @@ export default defineConfig(({ mode }) => ({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
+    // Run every test in one fixed time zone (no daylight saving) so results don't depend on the machine.
+    env: { TZ: 'America/Phoenix' },
   },
 }));
