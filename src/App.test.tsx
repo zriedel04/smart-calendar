@@ -128,6 +128,10 @@ describe('App', () => {
     await user.click(checkbox);
     const title = screen.getAllByText('Reply to internship recruiter').find((el) => el.tagName === 'P')!;
     expect(title).toHaveClass('line-through');
+
+    // Logging all of its time finished the task, so its due-date entry has no "not finished" toggle that wouldn't work.
+    expect(screen.queryByRole('checkbox', { name: /Mark "Reply to internship recruiter"/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Finished')).toBeInTheDocument();
   });
 
   it('remembers data after a reload', async () => {

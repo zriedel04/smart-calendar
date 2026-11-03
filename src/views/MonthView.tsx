@@ -215,6 +215,9 @@ export function MonthView({
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {selectedEntries.map((e) => {
               const canTick = e.kind === 'work' && selected === today;
+              // A task finished by logging all its time can't be reopened from here (only by editing its estimate),
+              // so its due-date entry gets a plain check mark instead of a checkbox.
+              const canToggleDue = e.kind === 'due' && (!e.done || Boolean(e.task.completedAt));
               const toggle = () => {
                 if (e.kind === 'due') {
                   dispatch({ type: 'task/setComplete', id: e.task.id, complete: !e.done });
@@ -226,7 +229,7 @@ export function MonthView({
               };
               return (
                 <li key={e.key} className="flex items-center gap-3 px-2 py-2.5">
-                  {canTick || e.kind === 'due' ? (
+                  {canTick || canToggleDue ? (
                     <button
                       type="button"
                       role="checkbox"
@@ -246,6 +249,10 @@ export function MonthView({
                     >
                       <Check className="size-3" strokeWidth={3} />
                     </button>
+                  ) : e.kind === 'due' ? (
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                      <Check className="size-3" strokeWidth={3} />
+                    </span>
                   ) : (
                     <span className={cx('ml-1.5 size-2 shrink-0 rounded-full', e.done ? 'bg-emerald-500' : PRIORITY_DOT[e.priority])} />
                   )}
