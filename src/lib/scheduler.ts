@@ -17,6 +17,12 @@ export interface SchedulableTask {
   id: string;
   dueDate: ISODate;
   remainingMinutes: Minutes;
+  /**
+   * The task's full size, used to break ties between tasks due on the same day (smaller first).
+   * It must not change as work is logged, or ticking off one task could reorder today's list.
+   * Defaults to `remainingMinutes`.
+   */
+  sizeMinutes?: Minutes;
   /** Used only to break ties between tasks due on the same day. */
   createdAt?: string;
 }
@@ -69,7 +75,9 @@ export const DEFAULT_HORIZON_DAYS = 365;
 /** Due date first, then smaller tasks (quick wins), then oldest first, then id for stability. */
 export function compareTasks(a: SchedulableTask, b: SchedulableTask): number {
   if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
-  if (a.remainingMinutes !== b.remainingMinutes) return a.remainingMinutes - b.remainingMinutes;
+  const sizeA = a.sizeMinutes ?? a.remainingMinutes;
+  const sizeB = b.sizeMinutes ?? b.remainingMinutes;
+  if (sizeA !== sizeB) return sizeA - sizeB;
   const createdA = a.createdAt ?? '';
   const createdB = b.createdAt ?? '';
   if (createdA !== createdB) return createdA < createdB ? -1 : 1;

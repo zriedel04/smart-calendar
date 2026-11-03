@@ -51,3 +51,15 @@ export function createSampleData(today: ISODate): AppData {
     ],
   };
 }
+
+/** True if `data` holds anything the user entered: tasks, logged time, events, or changed hours. */
+export function hasUserData(data: AppData): boolean {
+  const empty = createEmptyData();
+  return (
+    data.tasks.length > 0 ||
+    data.logs.length > 0 ||
+    data.events.length > 0 ||
+    Object.keys(data.overrides).length > 0 ||
+    JSON.stringify(data.weeklyHours) !== JSON.stringify(empty.weeklyHours)
+  );
+}

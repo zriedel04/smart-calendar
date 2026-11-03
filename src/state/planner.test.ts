@@ -32,6 +32,14 @@ describe('planFor', () => {
     expect(planFor(afterTick, TODAY).doneToday).toBe(h(3));
   });
 
+  it('keeps the order of same-day tasks stable when one is partly ticked off', () => {
+    const base = data({ tasks: [task('a', '2026-11-06', 4), task('b', '2026-11-06', 5)] });
+    expect(todayItems(base)).toEqual(['a:240', 'b:120']);
+
+    const afterTick = { ...base, logs: [{ id: 'l1', taskId: 'b', date: TODAY, minutes: h(2) }] };
+    expect(todayItems(afterTick)).toEqual(['a:240']);
+  });
+
   it('reschedules work you did not get to on an earlier day', () => {
     // Yesterday's plan isn't stored: whatever wasn't logged is simply still left to do.
     const d = data({

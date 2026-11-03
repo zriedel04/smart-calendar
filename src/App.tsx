@@ -7,7 +7,7 @@ import { cx } from './components/cx';
 import type { CalendarEvent } from './lib/availability';
 import type { ISODate } from './lib/dates';
 import { useStore } from './state/context';
-import { createSampleData } from './state/defaults';
+import { createSampleData, hasUserData } from './state/defaults';
 import { planFor } from './state/planner';
 import type { Task } from './state/types';
 import { useToday } from './state/useToday';
@@ -61,7 +61,7 @@ export default function App() {
   const editDay = (date?: ISODate) => setDialog({ kind: 'day', date });
   const editEvent = (event?: CalendarEvent) => setDialog({ kind: 'event', event });
   const loadSample = () => {
-    if (data.tasks.length && !window.confirm('Replace your current tasks, hours and events with sample data?')) return;
+    if (hasUserData(data) && !window.confirm('Replace your current tasks, hours and events with sample data?')) return;
     dispatch({ type: 'data/replace', data: createSampleData(today) });
     go('today');
   };

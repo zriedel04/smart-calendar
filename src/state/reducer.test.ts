@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyData } from './defaults';
+import { createEmptyData, hasUserData } from './defaults';
 import { reducer } from './reducer';
 import { parseAppData } from './storage';
 
@@ -71,5 +71,22 @@ describe('parseAppData', () => {
 
   it('rejects files that are not app data', () => {
     expect(() => parseAppData('{"hello": "world"}')).toThrow(/not Smart Calendar data/);
+  });
+});
+
+describe('hasUserData', () => {
+  it('counts changed hours, overrides and events as user data, not just tasks', () => {
+    const empty = createEmptyData();
+    expect(hasUserData(empty)).toBe(false);
+    expect(hasUserData(reducer(empty, { type: 'hours/setWeekday', weekday: 6, ranges: [{ start: 540, end: 720 }] }))).toBe(true);
+    expect(hasUserData(reducer(empty, { type: 'hours/setOverride', date: '2026-11-09', ranges: [] }))).toBe(true);
+    expect(
+      hasUserData(
+        reducer(empty, {
+          type: 'event/add',
+          draft: { title: 'Class', date: '2026-11-03', start: 840, end: 900, repeat: 'weekly' },
+        }),
+      ),
+    ).toBe(true);
   });
 });

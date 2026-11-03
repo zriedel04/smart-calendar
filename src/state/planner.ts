@@ -44,6 +44,7 @@ export function planFor(data: AppData, today: ISODate): Plan {
       id: task.id,
       dueDate: task.dueDate,
       createdAt: task.createdAt,
+      sizeMinutes: task.estimateMinutes,
       remainingMinutes: remainingMinutes(task, logged.get(task.id) ?? 0),
     })),
     capacityOn: (date) => {
