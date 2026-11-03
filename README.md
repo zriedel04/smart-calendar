@@ -13,11 +13,17 @@ Add what you need to get done, how long you think it'll take, and when it's due.
   <img src="docs/screenshots/change-hours.png" alt="Changing hours for one day" width="24%" />
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/month.png" alt="Month calendar with work crossed off" width="90%" />
+</p>
+
 ## Features
 
 - **A daily checklist built for you.** Each day's list adds up to the hours you have free. Tick items off as you go.
 - **Stays ahead of deadlines.** Work due next week gets pulled forward into today's free time instead of piling up the night before.
 - **Usual hours, with one-off changes.** Set default hours for each weekday (say, Mondays 12pm to 6pm), then change a single date (this Monday, 12pm to 4pm) without touching the others.
+- **Month calendar.** See planned work and due dates on every day, crossed off as you finish them.
+- **Add several tasks at once.** Enter a batch of assignments in one form.
 - **Re-plans instantly.** Change your hours, add a task, or tick something off and every day's list updates.
 - **Priorities at a glance.** Due today is **Urgent**, due within a week is **Needed**, anything later is **To do**, and missed due dates are **Overdue**.
 - **Fixed events.** Classes, shifts and appointments (one-time or weekly) are taken out of your work hours.
@@ -54,7 +60,7 @@ src/
   lib/          Pure logic: dates, time ranges, availability, priorities, the scheduler
   state/        App data types, reducer, local storage, and planFor() which connects data to the scheduler
   components/   Shared UI: buttons, cards, modals, task / event / hours forms
-  views/        The four screens: Today, Week, Tasks, Schedule
+  views/        The screens: Today, Week, Month, Tasks, Schedule
   App.tsx       Layout, navigation and dialogs
 ```
 

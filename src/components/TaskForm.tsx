@@ -13,10 +13,13 @@ export function TaskForm({
   task,
   today,
   onClose,
+  onAddMany,
 }: {
   task?: Task;
   today: ISODate;
   onClose: () => void;
+  /** Switches to adding several tasks at once. Only offered when adding a new task. */
+  onAddMany?: () => void;
 }) {
   const { data, dispatch } = useStore();
   const [title, setTitle] = useState(task?.title ?? '');
@@ -136,6 +139,16 @@ export function TaskForm({
           <p className="text-sm text-slate-500 dark:text-slate-400">
             You've logged {formatDuration(logged)} on this so far.
           </p>
+        )}
+
+        {!task && onAddMany && (
+          <button
+            type="button"
+            onClick={onAddMany}
+            className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-300"
+          >
+            Adding a lot? Add several at once
+          </button>
         )}
 
         <Field label="Notes (optional)">
