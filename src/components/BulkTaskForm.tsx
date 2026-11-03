@@ -35,7 +35,7 @@ export function BulkTaskForm({ today, onClose }: { today: ISODate; onClose: () =
   const minutesOf = (row: Row) => Math.round(Number(row.hours) * 60);
   const isFilled = (row: Row) => row.title.trim() !== '';
   const rowError = (row: Row) =>
-    !isFilled(row) ? null : !isISODate(row.dueDate) ? 'date' : !(minutesOf(row) >= 5) ? 'hours' : null;
+    !isFilled(row) ? null : !isISODate(row.dueDate) ? 'date' : !(Number.isFinite(minutesOf(row)) && minutesOf(row) >= 5) ? 'hours' : null;
 
   const filled = rows.filter(isFilled);
   const hasErrors = filled.some((r) => rowError(r));

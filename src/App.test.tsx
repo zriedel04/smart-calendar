@@ -116,6 +116,20 @@ describe('App', () => {
     expect(screen.getByText(/2 open/)).toBeInTheDocument();
   });
 
+  it('rejects a bulk row whose hours are too large to be a real number', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Add several' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add several tasks' });
+    await user.type(within(dialog).getByLabelText('Task 1 name'), 'Huge task');
+    fireEvent.change(within(dialog).getByLabelText('Task 1 hours'), { target: { value: '1e308' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+
+    expect(screen.getByRole('dialog', { name: 'Add several tasks' })).toBeInTheDocument();
+    expect(localStorage.getItem(STORAGE_KEY) ?? '').not.toContain('Huge task');
+  });
+
   it('shows work on a month calendar and crosses it off when done', async () => {
     const user = userEvent.setup();
     renderApp();
