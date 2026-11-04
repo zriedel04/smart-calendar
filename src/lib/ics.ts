@@ -59,6 +59,12 @@ function unescapeText(value: string): string {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/** The local date and minutes past midnight of an instant on this device. */
+function localAt(instant: number): { date: ISODate; minutes: number } {
+  const t = new Date(instant);
+  return { date: `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`, minutes: t.getHours() * 60 + t.getMinutes() };
+}
+
 // Creating a formatter is slow, and a long repeating series needs thousands of offset lookups.
 const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
 function zoneFormatter(timeZone: string): Intl.DateTimeFormat {
@@ -196,12 +202,11 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
   if (!end && duration) {
     const minutes = parseDuration(duration.value);
     if (minutes !== null) {
-      const total = (start.minutes ?? 0) + minutes;
-      end = {
-        date: addDays(start.date, Math.floor(total / 1440)),
-        minutes: allDay ? null : total % 1440,
-        instant: start.instant + minutes * 60000,
-      };
+      const instant = start.instant + minutes * 60000;
+      // A timed end is read from its own moment, since clocks can change during the entry.
+      end = allDay
+        ? { date: addDays(start.date, Math.floor(minutes / 1440)), minutes: null, instant }
+        : { ...localAt(instant), instant };
     }
   }
 
@@ -324,13 +329,8 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
       } else {
         const startAt = moment.minutes ?? 0;
         // The end comes from the occurrence's own end instant, since clocks can change during it.
-        const endLocal = new Date(moment.instant + length * 60000);
-        const endDay = `${endLocal.getFullYear()}-${pad(endLocal.getMonth() + 1)}-${pad(endLocal.getDate())}`;
-        const endAt = allDay
-          ? 0
-          : endDay > moment.date
-            ? 24 * 60
-            : Math.max(startAt, endLocal.getHours() * 60 + endLocal.getMinutes());
+        const endLocal = localAt(moment.instant + length * 60000);
+        const endAt = allDay ? 0 : endLocal.date > moment.date ? 24 * 60 : Math.max(startAt, endLocal.minutes);
         // Converting zones can move an occurrence to another day of the month (Mar 1 UTC is Feb 28 here),
         // so a run only continues while each occurrence lands on the day its repeat rule would give.
         const sameSlot =

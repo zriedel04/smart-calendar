@@ -154,7 +154,7 @@ describe('parseIcs', () => {
     ]);
   });
 
-  it('takes each end time from its own end moment when the clocks change during it', () => {
+  it('takes end times from the end moment when the clocks change during an entry', () => {
     // On a New York device, clocks spring forward at 2am on Mar 8, so 5:30-8:30 UTC is 12:30-4:30am that night.
     const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
     const zone = env.TZ;
@@ -167,6 +167,8 @@ describe('parseIcs', () => {
         ['2026-03-01', 30, 3 * 60 + 30],
         ['2026-03-08', 30, 4 * 60 + 30],
       ]);
+      const [single] = parseIcs(calendar('UID:dst-dur\r\nSUMMARY:Night\r\nDTSTART:20260308T003000\r\nDURATION:PT3H'));
+      expect([single?.start, single?.end]).toEqual([30, 4 * 60 + 30]);
     } finally {
       env.TZ = zone;
     }
