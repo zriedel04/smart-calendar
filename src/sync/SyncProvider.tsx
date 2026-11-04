@@ -144,6 +144,9 @@ export function SyncProvider({
   useEffect(() => {
     if (!user) {
       knownVersion.current = null;
+      // Signed out, maybe from another tab: forget this tab's checkpoints, so signing in again
+      // starts from what's saved (nothing, after a sign-out) and asks before replacing anything.
+      checkpoints.current.clear();
       return;
     }
     void run();

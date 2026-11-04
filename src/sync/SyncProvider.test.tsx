@@ -184,6 +184,30 @@ describe('Sync across devices', () => {
     expect(taskTitles(cloud.row?.data)).toContain('Added on the laptop');
   });
 
+  it('asks before replacing the account after another tab signed out', async () => {
+    const user = userEvent.setup();
+    const cloud = memoryStore();
+    const fake = fakeBackend(cloud, ME);
+    const shared = memorySyncState();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(createSampleData('2026-11-02')));
+    renderWithSync(fake.backend, shared);
+    await waitFor(() => expect(cloud.row?.version).toBe(1));
+
+    // Another tab signs out, which clears the saved checkpoint and signs this tab out too.
+    shared.save(ME.id, null);
+    await act(() => fake.backend.signOut());
+    // Signed out, the calendar changes here.
+    await user.click(screen.getByRole('button', { name: 'Add task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '2');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+
+    fake.finishSignIn(ME);
+    await screen.findByRole('dialog', { name: 'Which calendar do you want to keep?' });
+    expect(cloud.row!.version).toBe(1);
+  });
+
   it("asks which calendar to keep when this device and the account both have one", async () => {
     const user = userEvent.setup();
     const account = { ...createEmptyData(), tasks: [{ id: 't1', title: 'From my account', dueDate: '2026-11-06', estimateMinutes: 60, createdAt: '2026-11-01T00:00:00.000Z' }] };
