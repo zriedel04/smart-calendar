@@ -1,5 +1,5 @@
 import type { IcsEntry } from '../lib/ics';
-import { addDays, type ISODate } from '../lib/dates';
+import { addDays, daysBetween, type ISODate } from '../lib/dates';
 import type { EventDraft, TaskDraft } from './reducer';
 import type { AppData } from './types';
 
@@ -18,7 +18,8 @@ export interface ImportRow {
 const MAX_SPAN_DAYS = 31;
 
 function lastDate(entry: IcsEntry): ISODate | null {
-  if (entry.repeat !== 'none') return entry.until ?? null;
+  // The last occurrence starts on `until`; a multi-day entry runs on past it.
+  if (entry.repeat !== 'none') return entry.until ? addDays(entry.until, daysBetween(entry.date, entry.endDate)) : null;
   return entry.endDate;
 }
 
@@ -55,7 +56,7 @@ export function toEventDrafts(entry: IcsEntry): EventDraft[] {
     for (let d = entry.date; d <= entry.endDate && dates.length < MAX_SPAN_DAYS; d = addDays(d, 1)) dates.push(d);
     return dates.map((date, i) => ({ ...base, ...untilFor(i), date, start: 0, end: 24 * 60, allDay: true, blocksWork: false, kind }));
   }
-  const start = Math.min(entry.start, 24 * 60 - 15);
+  const start = entry.start;
   // A timed entry with no length still needs one to show up as a block of time.
   const end = entry.end > start ? entry.end : Math.min(start + 60, 24 * 60);
   return [{ ...base, ...untilFor(0), date: entry.date, start, end, allDay: false, blocksWork: true, kind: 'busy' }];

@@ -18,9 +18,9 @@ const entry = (partial: Partial<IcsEntry>): IcsEntry => ({
 
 describe('calendar import', () => {
   it('keeps weekly classes that started in the past but are still running', () => {
-    const [row] = planImport([entry({ date: '2026-08-24', repeat: 'weekly', until: '2026-12-11' })], createEmptyData(), '2026-11-02');
+    const [row] = planImport([entry({ date: '2026-08-24', endDate: '2026-08-24', repeat: 'weekly', until: '2026-12-11' })], createEmptyData(), '2026-11-02');
     expect(row?.as).toBe('event');
-    const [ended] = planImport([entry({ date: '2026-01-05', repeat: 'weekly', until: '2026-05-01' })], createEmptyData(), '2026-11-02');
+    const [ended] = planImport([entry({ date: '2026-01-05', endDate: '2026-01-05', repeat: 'weekly', until: '2026-05-01' })], createEmptyData(), '2026-11-02');
     expect(ended).toMatchObject({ as: 'skip', skipReason: 'past' });
   });
 
@@ -46,5 +46,16 @@ describe('calendar import', () => {
       ['2026-12-20', 'yearly', '2028-12-20'],
       ['2026-12-21', 'yearly', '2028-12-21'],
     ]);
+  });
+
+  it('keeps a valid late-night time as it is', () => {
+    const [e] = toEventDrafts(entry({ start: 23 * 60 + 50, end: 23 * 60 + 55 }));
+    expect(e).toMatchObject({ start: 23 * 60 + 50, end: 23 * 60 + 55 });
+  });
+
+  it('does not call a multi-day series over while its last occurrence is still running', () => {
+    const trip = entry({ allDay: true, date: '2024-11-01', endDate: '2024-11-05', repeat: 'yearly', until: '2026-11-01' });
+    expect(planImport([trip], createEmptyData(), '2026-11-03')[0]?.as).toBe('event');
+    expect(planImport([trip], createEmptyData(), '2026-11-06')[0]).toMatchObject({ as: 'skip', skipReason: 'past' });
   });
 });
