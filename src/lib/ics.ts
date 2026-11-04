@@ -323,7 +323,14 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
         if (run) run.broken = true;
       } else {
         const startAt = moment.minutes ?? 0;
-        const endAt = allDay ? 0 : Math.min(startAt + length, 24 * 60);
+        // The end comes from the occurrence's own end instant, since clocks can change during it.
+        const endLocal = new Date(moment.instant + length * 60000);
+        const endDay = `${endLocal.getFullYear()}-${pad(endLocal.getMonth() + 1)}-${pad(endLocal.getDate())}`;
+        const endAt = allDay
+          ? 0
+          : endDay > moment.date
+            ? 24 * 60
+            : Math.max(startAt, endLocal.getHours() * 60 + endLocal.getMinutes());
         // Converting zones can move an occurrence to another day of the month (Mar 1 UTC is Feb 28 here),
         // so a run only continues while each occurrence lands on the day its repeat rule would give.
         const sameSlot =

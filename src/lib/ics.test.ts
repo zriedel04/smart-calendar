@@ -154,6 +154,24 @@ describe('parseIcs', () => {
     ]);
   });
 
+  it('takes each end time from its own end moment when the clocks change during it', () => {
+    // On a New York device, clocks spring forward at 2am on Mar 8, so 5:30-8:30 UTC is 12:30-4:30am that night.
+    const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
+    const zone = env.TZ;
+    env.TZ = 'America/New_York';
+    try {
+      const entries = parseIcs(
+        calendar('UID:dst-end\r\nSUMMARY:Night\r\nDTSTART:20260301T053000Z\r\nDTEND:20260301T083000Z\r\nRRULE:FREQ=WEEKLY;COUNT=2'),
+      );
+      expect(entries.map((e) => [e.date, e.start, e.end])).toEqual([
+        ['2026-03-01', 30, 3 * 60 + 30],
+        ['2026-03-08', 30, 4 * 60 + 30],
+      ]);
+    } finally {
+      env.TZ = zone;
+    }
+  });
+
   it('imports monthly entries, keeping just the first date for the 29th to 31st', () => {
     const [club] = parseIcs(calendar('UID:m1\r\nSUMMARY:Book club\r\nDTSTART:20261115T190000\r\nDTEND:20261115T200000\r\nRRULE:FREQ=MONTHLY;COUNT=3'));
     expect(club).toMatchObject({ repeat: 'monthly', date: '2026-11-15', until: '2027-01-15' });
