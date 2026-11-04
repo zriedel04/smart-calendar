@@ -69,7 +69,7 @@ Signed in, the whole calendar is one row in a Supabase Postgres table ([`supabas
 - **Every save is checked against a version number**, so a device can't overwrite a save it hasn't seen. If another device saved first, the app fetches that save, merges, and tries again.
 - **Merging is three-way** ([`src/sync/merge.ts`](src/sync/merge.ts)). Each device remembers the version it last agreed on with the account. Comparing both sides with it tells a deletion apart from an addition, so a task deleted on the phone stays deleted, and tasks added on each device are both kept. If the same task was edited on both, this device's edit wins.
 - **Changes reach other open devices right away** through Supabase Realtime, and the app also catches up when you come back to it or reconnect.
-- **The first time a device that already has data signs in** to an account that has a different calendar, it asks which one to keep.
+- **The first time a device that already has data signs in** to an account that has a different calendar, it asks which one to keep. Nothing is replaced or synced until you choose.
 
 The sync logic ([`src/sync/engine.ts`](src/sync/engine.ts)) talks to a small storage interface, so the tests run it against an in-memory store, including two devices saving at the same moment.
 
