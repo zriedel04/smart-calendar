@@ -55,7 +55,13 @@ export function reducer(state: AppData, action: Action): AppData {
     case 'task/update':
       return {
         ...state,
-        tasks: state.tasks.map((t) => (t.id === action.id ? { ...t, ...action.draft } : t)),
+        tasks: state.tasks.map((t) => {
+          if (t.id !== action.id) return t;
+          if (!action.draft.planDate) return { ...t, ...action.draft };
+          // Choosing a day to work on it replaces pushing it off.
+          const { notBefore: _notBefore, ...rest } = t;
+          return { ...rest, ...action.draft };
+        }),
       };
     case 'task/delete':
       return {
@@ -89,7 +95,10 @@ export function reducer(state: AppData, action: Action): AppData {
         tasks: state.tasks.map((t) => {
           if (t.id !== action.id || t.seriesId) return t;
           const { planDate: _planDate, ...rest } = t;
-          return action.date ? { ...rest, planDate: action.date } : rest;
+          if (!action.date) return rest;
+          // Choosing a day to work on it replaces pushing it off, which could keep it off that day.
+          const { notBefore: _notBefore, ...unpushed } = rest;
+          return { ...unpushed, planDate: action.date };
         }),
       };
     case 'task/unpush':
