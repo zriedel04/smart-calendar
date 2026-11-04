@@ -1,4 +1,5 @@
 import type { CloudStore } from './engine';
+import { signInErrorMessage } from './errors';
 
 export interface SyncUser {
   id: string;
@@ -56,7 +57,7 @@ export function supabaseBackend(): SyncBackend {
         email,
         options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
       });
-      return error ? error.message : null;
+      return error ? signInErrorMessage(error) : null;
     },
     async signOut() {
       const { db } = await load();

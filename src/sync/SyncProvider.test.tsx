@@ -8,7 +8,7 @@ import { StoreProvider } from '../state/StoreProvider';
 import type { SyncBackend, SyncUser } from './backend';
 import type { SyncState } from './engine';
 import { memoryStore } from './memoryStore';
-import { errorMessage } from './errors';
+import { errorMessage, signInErrorMessage } from './errors';
 import { SyncProvider } from './SyncProvider';
 
 function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser | null = null) {
@@ -178,5 +178,12 @@ describe('errorMessage', () => {
     );
     expect(errorMessage(new Error('Failed to fetch'))).toBe('Failed to fetch');
     expect(errorMessage(undefined)).toBe("Couldn't reach your account.");
+  });
+});
+
+describe('signInErrorMessage', () => {
+  it('explains the email limit in plain words', () => {
+    expect(signInErrorMessage({ message: 'email rate limit exceeded', code: 'over_email_send_rate_limit', status: 429 })).toMatch(/^Too many sign-in emails/);
+    expect(signInErrorMessage({ message: 'Invalid email' })).toBe('Invalid email');
   });
 });
