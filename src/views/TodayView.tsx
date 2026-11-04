@@ -203,7 +203,7 @@ export function TodayView({
                         // A repeating task's copy belongs to its day, so pushing it skips the day.
                         dispatch(
                           task.seriesId
-                            ? { type: 'task/delete', id: task.id }
+                            ? { type: 'task/skip', id: task.id }
                             : { type: 'task/push', id: task.id, until: addDays(today, 1) },
                         );
                         setOpenRow(null);

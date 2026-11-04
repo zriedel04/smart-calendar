@@ -102,7 +102,7 @@ export function TaskForm({
       ? `Skip "${task.title}" on this day? It still repeats on the other days.`
       : `Delete "${task.title}"? This also removes the time you logged on it.`;
     if (window.confirm(message)) {
-      dispatch({ type: 'task/delete', id: task.id });
+      dispatch(series ? { type: 'task/skip', id: task.id } : { type: 'task/delete', id: task.id });
       onClose();
     }
   }

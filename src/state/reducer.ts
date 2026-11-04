@@ -16,6 +16,7 @@ export type Action =
   | { type: 'task/setComplete'; id: string; complete: boolean }
   | { type: 'task/push'; id: string; until: ISODate }
   | { type: 'task/unpush'; id: string }
+  | { type: 'task/skip'; id: string }
   | { type: 'work/log'; taskId: string; date: ISODate; minutes: number }
   | { type: 'work/undoDay'; taskId: string; date: ISODate }
   | { type: 'hours/setWeekday'; weekday: Weekday; ranges: TimeRange[] }
@@ -81,6 +82,15 @@ export function reducer(state: AppData, action: Action): AppData {
           return rest;
         }),
       };
+    case 'task/skip': {
+      // Skipping a day of a repeating task removes it, unless you logged time on it: then it's kept
+      // as finished so that time isn't lost.
+      if (!state.logs.some((l) => l.taskId === action.id)) {
+        return { ...state, tasks: state.tasks.filter((t) => t.id !== action.id) };
+      }
+      const completedAt = new Date().toISOString();
+      return { ...state, tasks: state.tasks.map((t) => (t.id === action.id ? { ...t, completedAt } : t)) };
+    }
     case 'work/log':
       if (action.minutes <= 0) return state;
       return {

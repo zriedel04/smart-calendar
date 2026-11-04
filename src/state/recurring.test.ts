@@ -36,6 +36,17 @@ describe('repeating tasks', () => {
     expect(data.tasks.find((t) => t.id === tuesday.id)?.completedAt).toBeDefined();
   });
 
+  it('skips a day, keeping it as finished if you logged time on it', () => {
+    let data = add();
+    const [monday, tuesday] = data.tasks;
+    data = reducer(data, { type: 'work/log', taskId: monday!.id, date: MONDAY, minutes: 20 });
+    data = reducer(data, { type: 'task/skip', id: monday!.id });
+    data = reducer(data, { type: 'task/skip', id: tuesday!.id });
+    expect(data.tasks.find((t) => t.id === monday!.id)?.completedAt).toBeDefined();
+    expect(data.logs).toHaveLength(1);
+    expect(data.tasks.some((t) => t.id === tuesday!.id)).toBe(false);
+  });
+
   it('stops at its last day', () => {
     expect(dates(add({ ...study, until: '2026-11-03' }))).toEqual(['2026-11-02', '2026-11-03']);
   });
