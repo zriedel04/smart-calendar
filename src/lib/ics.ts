@@ -1,4 +1,4 @@
-import { addDays, daysBetween, weekdayOf, type ISODate } from './dates';
+import { addDays, daysBetween, isISODate, weekdayOf, type ISODate } from './dates';
 import type { EventRepeat } from './availability';
 import type { Minutes } from './time';
 
@@ -80,6 +80,8 @@ interface Moment {
   date: ISODate;
   /** Minutes after midnight, or null for a date with no time. */
   minutes: Minutes | null;
+  /** The moment as epoch milliseconds. Dates and floating times count as this device's local time. */
+  instant: number;
 }
 
 /** Reads a DTSTART/DTEND/UNTIL value as a date and time in this device's time zone. */
@@ -88,7 +90,8 @@ function parseMoment(value: string, tzid?: string): Moment | null {
   if (!m) return null;
   const [, y, mo, d, hh, mm, ss, z] = m;
   const date = `${y}-${mo}-${d}`;
-  if (hh === undefined) return { date, minutes: null };
+  if (!isISODate(date)) return null; // Such as Feb 29 in a year that doesn't have one.
+  if (hh === undefined) return { date, minutes: null, instant: new Date(Number(y), Number(mo) - 1, Number(d)).getTime() };
 
   const wall = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), Number(ss ?? 0));
   let instant: number | null = null;
@@ -103,12 +106,16 @@ function parseMoment(value: string, tzid?: string): Moment | null {
       instant = null; // Unknown zone name: treat the time as local.
     }
   }
-  if (instant === null) return { date, minutes: Number(hh) * 60 + Number(mm) };
+  if (instant === null) {
+    const local = new Date(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), Number(ss ?? 0));
+    return { date, minutes: Number(hh) * 60 + Number(mm), instant: local.getTime() };
+  }
 
   const local = new Date(instant);
   return {
     date: `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`,
     minutes: local.getHours() * 60 + local.getMinutes(),
+    instant,
   };
 }
 
@@ -182,6 +189,7 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
       end = {
         date: addDays(start.date, Math.floor(total / 1440)),
         minutes: allDay ? null : total % 1440,
+        instant: start.instant + minutes * 60000,
       };
     }
   }
@@ -240,10 +248,8 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
 
   // Repeat rules describe dates and times in the entry's own time zone. Each occurrence is converted
   // to this device's zone on its own, since daylight saving can change the gap between the two zones.
-  const zoned = !allDay && (startProp.value.trim().toUpperCase().endsWith('Z') || Boolean(startProp.params.TZID));
-  const timePart = startProp.value.trim().slice(8);
-  const localAt = (date: ISODate): Moment =>
-    zoned ? (parseMoment(date.replace(/-/g, '') + timePart, startProp.params.TZID) ?? { date, minutes: null }) : { date, minutes: start.minutes };
+  const timePart = allDay ? '' : startProp.value.trim().slice(8);
+  const occurrenceAt = (date: ISODate) => parseMoment(date.replace(/-/g, '') + timePart, startProp.params.TZID);
   const length = endMinutes - startMinutes;
 
   const byDay = (rule.BYDAY ?? '')
@@ -251,51 +257,66 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
     .map((d) => ICS_WEEKDAYS[d.slice(-2)])
     .filter((d): d is number => d !== undefined);
   const weekdays = rule.FREQ === 'WEEKLY' && byDay.length > 0 ? byDay : [weekdayOf(sourceDate)];
-  const nextOccurrence = (date: ISODate): ISODate =>
-    rule.FREQ === 'YEARLY' ? `${Number(date.slice(0, 4)) + 1}${sourceDate.slice(4)}` : addDays(date, 7);
 
-  // The last date the series can happen on, from UNTIL or from COUNT, in this device's zone.
-  let until: ISODate | undefined = rule.UNTIL ? parseMoment(rule.UNTIL)?.date : undefined;
+  // Where the series stops: UNTIL is a moment (a date alone means the end of that day), COUNT a number of occurrences.
+  const untilMoment = rule.UNTIL ? parseMoment(rule.UNTIL) : null;
+  const untilInstant = untilMoment
+    ? untilMoment.minutes === null
+      ? new Date(addDays(untilMoment.date, 1) + 'T00:00').getTime() - 1
+      : untilMoment.instant
+    : null;
   const count = rule.COUNT ? Number(rule.COUNT) : NaN;
-  if (!until && Number.isInteger(count) && count > 0) {
-    let last = sourceDate;
-    if (rule.FREQ === 'YEARLY') last = `${Number(sourceDate.slice(0, 4)) + count - 1}${sourceDate.slice(4)}`;
-    else {
-      let seen = 0;
-      for (let d = sourceDate; seen < count; d = addDays(d, 1)) {
-        if (weekdays.includes(weekdayOf(d))) {
-          seen++;
-          last = d;
-        }
-      }
+  const counted = Number.isInteger(count) && count > 0;
+  const bounded = untilInstant !== null || counted;
+
+  // Occurrences removed from the series (EXDATE). They still count toward COUNT.
+  const excluded = new Set<number>();
+  for (const prop of props) {
+    if (prop.name !== 'EXDATE') continue;
+    for (const value of prop.value.split(',')) {
+      const moment = parseMoment(value, prop.params.TZID);
+      if (moment) excluded.add(moment.instant);
     }
-    until = localAt(last).date;
   }
 
   // Without an end, look two years past today for daylight-saving changes; the last stretch then repeats forever.
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const horizon = addDays(sourceDate > today ? sourceDate : today, 731);
-  const repeat: EventRepeat = rule.FREQ === 'YEARLY' ? 'yearly' : 'weekly';
-  const entries: IcsEntry[] = [];
 
-  for (const weekday of weekdays) {
-    // Runs of occurrences that land at the same local time become one repeating entry each.
-    const runs: { first: ISODate; last: ISODate; start: Minutes; end: Minutes }[] = [];
-    let occurrence = rule.FREQ === 'YEARLY' ? sourceDate : firstOn(sourceDate, weekday);
-    for (let i = 0; i < 2000; i++, occurrence = nextOccurrence(occurrence)) {
-      if (!until && occurrence > horizon) break;
-      const local = localAt(occurrence);
-      if (until && local.date > until) break;
-      const startAt = local.minutes ?? 0;
-      const endAt = allDay ? 0 : Math.min(startAt + length, 24 * 60);
-      const run = runs[runs.length - 1];
-      if (run && run.start === startAt && run.end === endAt) run.last = local.date;
-      else runs.push({ first: local.date, last: local.date, start: startAt, end: endAt });
+  // Walk the series in order. Runs of occurrences that land at the same local time, with nothing
+  // excluded in between, become one repeating entry each (one set of runs per weekday).
+  type Run = { first: ISODate; last: ISODate; start: Minutes; end: Minutes; broken: boolean };
+  const runs = new Map<number, Run[]>(weekdays.map((w) => [w, []]));
+  let seen = 0;
+  for (let i = 0, d = sourceDate; i < 20000; i++) {
+    if (counted && seen >= count) break;
+    if (!bounded && d > horizon) break;
+    const inSeries = rule.FREQ === 'YEARLY' ? true : weekdays.includes(weekdayOf(d));
+    const moment = inSeries ? occurrenceAt(d) : null;
+    if (moment) {
+      if (untilInstant !== null && moment.instant > untilInstant) break;
+      seen++;
+      const series = runs.get(rule.FREQ === 'YEARLY' ? weekdays[0]! : weekdayOf(d))!;
+      const run = series[series.length - 1];
+      if (excluded.has(moment.instant)) {
+        if (run) run.broken = true;
+      } else {
+        const startAt = moment.minutes ?? 0;
+        const endAt = allDay ? 0 : Math.min(startAt + length, 24 * 60);
+        if (run && !run.broken && run.start === startAt && run.end === endAt) run.last = moment.date;
+        else series.push({ first: moment.date, last: moment.date, start: startAt, end: endAt, broken: false });
+      }
     }
-    runs.forEach((run, i) => {
-      const isLast = i === runs.length - 1;
-      const runUntil = isLast ? until : run.last;
-      const span = daysBetween(base.date, base.endDate);
+    d = rule.FREQ === 'YEARLY' ? `${Number(d.slice(0, 4)) + 1}${sourceDate.slice(4)}` : addDays(d, 1);
+  }
+
+  const repeat: EventRepeat = rule.FREQ === 'YEARLY' ? 'yearly' : 'weekly';
+  const span = daysBetween(base.date, base.endDate);
+  const entries: IcsEntry[] = [];
+  for (const series of runs.values()) {
+    series.forEach((run, i) => {
+      // The last run of an endless series keeps repeating; every other run ends at its last occurrence.
+      const runUntil = i === series.length - 1 && !bounded ? undefined : run.last;
       entries.push({
         ...base,
         repeat,
@@ -306,10 +327,5 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
       });
     });
   }
-  return entries;
-}
-
-/** The first date on or after `from` that falls on `weekday`. */
-function firstOn(from: ISODate, weekday: number): ISODate {
-  return addDays(from, (weekday - weekdayOf(from) + 7) % 7);
+  return entries.sort((a, b) => a.date.localeCompare(b.date));
 }

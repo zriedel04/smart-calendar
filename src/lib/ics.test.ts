@@ -57,8 +57,8 @@ describe('parseIcs', () => {
       ),
     );
     expect(entries.map((e) => [e.date, e.repeat, e.until])).toEqual([
-      ['2026-08-24', 'weekly', '2026-12-11'],
-      ['2026-08-26', 'weekly', '2026-12-11'],
+      ['2026-08-24', 'weekly', '2026-12-07'],
+      ['2026-08-26', 'weekly', '2026-12-09'],
       ['2026-08-28', 'weekly', '2026-12-11'],
     ]);
     expect(entries[0]).toMatchObject({ start: 10 * 60, end: 10 * 60 + 50 });
@@ -83,7 +83,8 @@ describe('parseIcs', () => {
     const [weekly] = parseIcs(calendar('UID:w\r\nSUMMARY:Workshop\r\nDTSTART:20261103T100000\r\nDTEND:20261103T110000\r\nRRULE:FREQ=WEEKLY;COUNT=2'));
     expect(weekly).toMatchObject({ repeat: 'weekly', until: '2026-11-10' });
     const mwf = parseIcs(calendar('UID:m\r\nSUMMARY:Lab\r\nDTSTART:20261102T100000\r\nDTEND:20261102T110000\r\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=4'));
-    expect(mwf.map((e) => e.until)).toEqual(['2026-11-09', '2026-11-09', '2026-11-09']);
+    // Mon Nov 2, Wed Nov 4, Fri Nov 6, Mon Nov 9.
+    expect(mwf.map((e) => e.until)).toEqual(['2026-11-09', '2026-11-04', '2026-11-06']);
     const [yearly] = parseIcs(calendar('UID:y\r\nSUMMARY:Fair\r\nDTSTART;VALUE=DATE:20261001\r\nRRULE:FREQ=YEARLY;COUNT=3'));
     expect(yearly?.until).toBe('2028-10-01');
   });
@@ -117,5 +118,28 @@ describe('parseIcs', () => {
       calendar('UID:b\r\nSUMMARY:Sam\r\nDTSTART;VALUE=DATE:20261112\r\nRRULE:FREQ=YEARLY;BYMONTH=11;BYMONTHDAY=12'),
     );
     expect(birthday?.repeat).toBe('yearly');
+  });
+
+  it('stops at the exact UNTIL moment, not just its date', () => {
+    // 5pm UTC is 10am in Phoenix; the series ends at 9am Phoenix time on Nov 9, so Nov 9 is out.
+    const [entry] = parseIcs(
+      calendar('UID:u\r\nSUMMARY:Meeting\r\nDTSTART:20261102T170000Z\r\nDTEND:20261102T180000Z\r\nRRULE:FREQ=WEEKLY;UNTIL=20261109T160000Z'),
+    );
+    expect(entry).toMatchObject({ date: '2026-11-02', until: '2026-11-02', start: 10 * 60 });
+  });
+
+  it('leaves out excluded dates, splitting the series around them', () => {
+    const entries = parseIcs(
+      calendar('UID:x\r\nSUMMARY:Tutoring\r\nDTSTART:20261102T100000\r\nDTEND:20261102T110000\r\nRRULE:FREQ=WEEKLY;COUNT=4\r\nEXDATE:20261109T100000'),
+    );
+    expect(entries.map((e) => [e.date, e.until])).toEqual([
+      ['2026-11-02', '2026-11-02'],
+      ['2026-11-16', '2026-11-23'],
+    ]);
+  });
+
+  it('counts only real dates for a Feb 29 yearly entry', () => {
+    const [leap] = parseIcs(calendar('UID:l\r\nSUMMARY:Leap party\r\nDTSTART;VALUE=DATE:20240229\r\nRRULE:FREQ=YEARLY;COUNT=2'));
+    expect(leap).toMatchObject({ date: '2024-02-29', repeat: 'yearly', until: '2028-02-29' });
   });
 });
