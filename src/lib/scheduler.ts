@@ -25,6 +25,8 @@ export interface SchedulableTask {
   sizeMinutes?: Minutes;
   /** Used only to break ties between tasks due on the same day. */
   createdAt?: string;
+  /** No work is planned on the task before this date, such as after pushing it to tomorrow. */
+  notBefore?: ISODate;
 }
 
 export interface PlanItem {
@@ -107,6 +109,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     for (const entry of queue) {
       if (free <= 0) break;
       if (entry.left <= 0) continue;
+      if (entry.task.notBefore && date < entry.task.notBefore) continue;
 
       const slice = Math.min(entry.left, free);
       // A tiny slice of a big task isn't useful. Leave the gap for a smaller task that fits.

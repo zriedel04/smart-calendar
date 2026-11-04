@@ -14,6 +14,8 @@ export interface Task {
   completedAt?: string;
   /** The calendar entry this was imported from, so importing the same file twice doesn't add it twice. */
   sourceId?: string;
+  /** Set when you push a task off your list: no work on it is planned before this date. */
+  notBefore?: ISODate;
 }
 
 /** Time you spent on a task on a given day. Ticking an item on the Today list creates one. */
