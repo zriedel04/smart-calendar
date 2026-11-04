@@ -1,5 +1,4 @@
 import { addDays, weekdayOf, WEEKDAY_NAMES, type ISODate, type Weekday } from '../lib/dates';
-import { createId } from './ids';
 import { loggedMinutesByTask, isTaskComplete } from './planner';
 import type { AppData, Task, TaskSeries } from './types';
 
@@ -30,9 +29,12 @@ export function nextSeriesDate(series: TaskSeries, today: ISODate): ISODate | nu
   return null;
 }
 
+/** A day's copy has the same id on every device, so two devices filling the same week don't make it twice. */
+export const copyId = (seriesId: string, date: ISODate) => `${seriesId}@${date}`;
+
 function copyOf(series: TaskSeries, date: ISODate, createdAt: string): Task {
   return {
-    id: createId(),
+    id: copyId(series.id, date),
     title: series.title,
     dueDate: date,
     // A day's copy is planned on its own day, never pulled forward like a one-off task.

@@ -55,6 +55,40 @@ function mergeByKey<V>(base: Record<string, V>, local: Record<string, V>, remote
 }
 
 /**
+ * Repeating tasks' copies made before copies had the same id on every device can show up twice
+ * for one day after a merge. Keep one per series and day (the one you started, if any) and move
+ * any logged work and timer onto it.
+ */
+function dedupeCopies(data: AppData) {
+  const started = new Set([...data.logs.map((l) => l.taskId), ...(data.timer ? [data.timer.taskId] : [])]);
+  const keep = new Map<string, string>();
+  const replaced = new Map<string, string>();
+  const score = (t: AppData['tasks'][number]) => (started.has(t.id) ? 2 : 0) + (t.completedAt ? 1 : 0);
+  for (const task of data.tasks) {
+    if (!task.seriesId) continue;
+    const key = `${task.seriesId}/${task.dueDate}`;
+    const kept = keep.get(key);
+    if (!kept) {
+      keep.set(key, task.id);
+      continue;
+    }
+    const keptTask = data.tasks.find((t) => t.id === kept)!;
+    const [winner, loser] = score(task) > score(keptTask) ? [task.id, kept] : [kept, task.id];
+    keep.set(key, winner);
+    replaced.set(loser, winner);
+  }
+  if (replaced.size === 0) return;
+  const target = (id: string) => {
+    let next = id;
+    while (replaced.has(next)) next = replaced.get(next)!;
+    return next;
+  };
+  data.tasks = data.tasks.filter((t) => !replaced.has(t.id));
+  data.logs = data.logs.map((l) => (replaced.has(l.taskId) ? { ...l, taskId: target(l.taskId) } : l));
+  if (data.timer && replaced.has(data.timer.taskId)) data.timer = { ...data.timer, taskId: target(data.timer.taskId) };
+}
+
+/**
  * Combines this device's calendar with the one saved in the account.
  *
  * `base` is the version both last agreed on (the last successful sync). Comparing each side with it
@@ -74,6 +108,8 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   };
   const timer = pick(base.timer, local.timer, remote.timer);
   if (timer) merged.timer = timer;
+
+  dedupeCopies(merged);
 
   // Work logged or a timer running on a task deleted on the other device would point at nothing.
   const taskIds = new Set(merged.tasks.map((t) => t.id));

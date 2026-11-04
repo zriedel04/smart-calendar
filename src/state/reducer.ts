@@ -48,7 +48,10 @@ function stopTimer(state: AppData, at: string, date: ISODate): AppData {
   const { timer, ...rest } = state;
   const minutes = timerMinutes(timer.startedAt, at);
   if (minutes < 1 || !state.tasks.some((t) => t.id === timer.taskId)) return rest;
-  return { ...rest, logs: [...state.logs, { id: createId(), taskId: timer.taskId, date, minutes }] };
+  // The log's id comes from the timer itself, so if two synced devices both stop the same timer,
+  // merging keeps one log for it instead of counting the time twice.
+  const id = `timer:${timer.taskId}:${timer.startedAt}`;
+  return { ...rest, logs: [...state.logs, { id, taskId: timer.taskId, date, minutes }] };
 }
 
 /**
