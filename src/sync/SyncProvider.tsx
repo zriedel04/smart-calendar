@@ -34,6 +34,7 @@ export function SyncProvider({
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<RemoteCalendar | null>(null);
+  const [conflictPostponed, setConflictPostponed] = useState(false);
 
   // The sync loop reads these without re-subscribing on every change.
   const dataRef = useRef(data);
@@ -184,21 +185,26 @@ export function SyncProvider({
       lastSynced,
       error,
       conflict: user ? conflict : null,
+      conflictPostponed,
       signIn: (email) => backend.signIn(email),
       signOut: async () => {
         const current = userRef.current;
         await backend.signOut();
         // This device keeps its calendar; signing in again starts with a fresh first sync.
         if (current) setCheckpoint(current.id, null);
+        setConflictPostponed(false);
         setUser(null);
       },
       resolveConflict: (choice) => {
         setConflict(null);
+        setConflictPostponed(false);
         void run(choice);
       },
+      postponeConflict: () => setConflictPostponed(true),
+      reopenConflict: () => setConflictPostponed(false),
       syncNow: () => void run(),
     }),
-    [status, user, lastSynced, error, conflict, backend, setCheckpoint, run],
+    [status, user, lastSynced, error, conflict, conflictPostponed, backend, setCheckpoint, run],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

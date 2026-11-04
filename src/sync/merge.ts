@@ -123,6 +123,40 @@ function dropCopiesOfStoppedSeries(base: AppData, data: AppData) {
 }
 
 /**
+ * Skipping a day is the user's choice, but merging a series ignores `skipped` so that the app's own
+ * tidying of it isn't treated as an edit. Days skipped on either device stay skipped. Passed days
+ * are tidied away again the next time the app fills the series.
+ */
+function keepAllSkips(local: AppData, remote: AppData, data: AppData) {
+  const skipsOf = (d: AppData) => new Map((d.series ?? []).map((s) => [s.id, s.skipped ?? []]));
+  const l = skipsOf(local);
+  const r = skipsOf(remote);
+  data.series = data.series?.map((s) => {
+    const { skipped: _skipped, ...rest } = s;
+    const skipped = [...new Set([...(l.get(s.id) ?? []), ...(r.get(s.id) ?? [])])].sort();
+    return skipped.length ? { ...rest, skipped } : rest;
+  });
+}
+
+/**
+ * The app clears a repeating task's missed day by itself once the day has passed. If the other
+ * device logged time or started a timer on that day meanwhile, bring the day back so the work isn't
+ * lost. The next fill marks it finished.
+ */
+function keepStartedCopies(local: AppData, remote: AppData, data: AppData) {
+  const present = new Set(data.tasks.map((t) => t.id));
+  const started = new Set([...data.logs.map((l) => l.taskId), ...(data.timer ? [data.timer.taskId] : [])]);
+  for (const id of started) {
+    if (present.has(id)) continue;
+    const copy = local.tasks.find((t) => t.id === id) ?? remote.tasks.find((t) => t.id === id);
+    if (copy?.seriesId) {
+      data.tasks.push(copy);
+      present.add(id);
+    }
+  }
+}
+
+/**
  * Combines this device's calendar with the one saved in the account.
  *
  * `base` is the version both last agreed on (the last successful sync). Comparing each side with it
@@ -143,6 +177,8 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   const timer = pick(base.timer, local.timer, remote.timer);
   if (timer) merged.timer = timer;
 
+  keepAllSkips(local, remote, merged);
+  keepStartedCopies(local, remote, merged);
   dedupeCopies(merged);
   dropCopiesOfStoppedSeries(base, merged);
 

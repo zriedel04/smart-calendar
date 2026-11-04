@@ -5,13 +5,14 @@ import { Button, Modal } from './ui';
 export function SyncConflictDialog() {
   const sync = useSync();
   const remote = sync.conflict;
-  if (!remote) return null;
+  if (!remote || sync.conflictPostponed) return null;
   const count = remote.data.tasks.filter((t) => !t.completedAt).length;
 
   return (
     <Modal
       title="Which calendar do you want to keep?"
-      onClose={() => sync.resolveConflict('account')}
+      // Closing it isn't a choice: nothing is replaced, and nothing syncs until you pick one.
+      onClose={sync.postponeConflict}
       footer={
         <>
           <Button onClick={() => sync.resolveConflict('device')}>Keep this device's</Button>

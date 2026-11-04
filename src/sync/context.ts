@@ -13,10 +13,15 @@ export interface SyncValue {
   error: string | null;
   /** Set on a device's first sync when it and the account both have a different calendar. */
   conflict: RemoteCalendar | null;
+  /** True after closing the question without choosing: nothing syncs until a calendar is chosen. */
+  conflictPostponed: boolean;
   /** Emails a sign-in link. Resolves to an error message, or null once it's sent. */
   signIn: (email: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   resolveConflict: (choice: FirstSyncChoice) => void;
+  /** Closes the question without choosing; it can be opened again from the account card. */
+  postponeConflict: () => void;
+  reopenConflict: () => void;
   syncNow: () => void;
 }
 
@@ -29,9 +34,12 @@ export const SyncContext = createContext<SyncValue>({
   lastSynced: null,
   error: null,
   conflict: null,
+  conflictPostponed: false,
   signIn: async () => 'Accounts aren\'t available here.',
   signOut: async () => {},
   resolveConflict: noop,
+  postponeConflict: noop,
+  reopenConflict: noop,
   syncNow: noop,
 });
 

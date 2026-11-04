@@ -85,6 +85,35 @@ describe('mergeAppData', () => {
     expect(mergeAppData(base, edited, phone).series?.map((s) => s.title)).toEqual(['Spanish']);
   });
 
+  it("keeps time logged on a repeating task's day that the other device cleared as missed", () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const monday = base.tasks.find((t) => t.dueDate === '2026-11-02')!;
+    // The phone logs 30 minutes on Monday's day offline; the laptop opens on Tuesday and clears it.
+    const phone = reducer(base, { type: 'work/log', taskId: monday.id, minutes: 30, date: '2026-11-02' });
+    const laptop = reducer(base, { type: 'series/fill', today: '2026-11-03' });
+    expect(laptop.tasks.some((t) => t.id === monday.id)).toBe(false);
+    for (const merged of [mergeAppData(base, phone, laptop), mergeAppData(base, laptop, phone)]) {
+      expect(merged.tasks.some((t) => t.id === monday.id)).toBe(true);
+      expect(merged.logs.reduce((sum, l) => sum + l.minutes, 0)).toBe(30);
+    }
+  });
+
+  it('keeps a day skipped on one device while the other moved on to a new day', () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const id = base.series![0]!.id;
+    const friday = base.tasks.find((t) => t.dueDate === '2026-11-06')!;
+    const phone = reducer(base, { type: 'task/skip', id: friday.id });
+    const laptop = reducer(base, { type: 'series/fill', today: '2026-11-03' });
+    for (let merged of [mergeAppData(base, phone, laptop), mergeAppData(base, laptop, phone)]) {
+      expect(merged.series![0]!.skipped).toEqual(['2026-11-06']);
+      // Editing the series later doesn't bring Friday back.
+      merged = reducer(merged, { type: 'series/update', id, draft: { ...draft, title: 'Spanish' }, today: '2026-11-03' });
+      expect(merged.tasks.some((t) => t.dueDate === '2026-11-06')).toBe(false);
+    }
+  });
+
   it('keeps one copy of a day made twice before ids matched, with its logged time', () => {
     const copy = (id: string): Task => ({ ...task(id, 'Study'), dueDate: '2026-11-05', seriesId: 's1' });
     const base = createEmptyData();

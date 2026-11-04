@@ -77,9 +77,10 @@ export function AccountCard() {
     );
   }
 
-  const trouble = sync.status === 'offline' || sync.status === 'error';
-  const statusText =
-    sync.status === 'syncing'
+  const trouble = sync.status === 'offline' || sync.status === 'error' || sync.conflict !== null;
+  const statusText = sync.conflict
+    ? 'Your account has a different calendar. Choose which one to keep to start syncing.'
+    : sync.status === 'syncing'
       ? 'Syncing…'
       : sync.status === 'offline'
         ? 'Offline. Changes will sync when you\'re back online.'
@@ -95,9 +96,15 @@ export function AccountCard() {
           {trouble ? <CloudOff className="size-4 shrink-0" aria-hidden /> : <Cloud className="size-4 shrink-0 text-emerald-500" aria-hidden />}
           <span>{statusText}</span>
         </p>
-        <Button size="sm" onClick={sync.syncNow} disabled={sync.status === 'syncing'}>
-          <RefreshCw className="size-4" /> Sync now
-        </Button>
+        {sync.conflict ? (
+          <Button size="sm" variant="primary" onClick={sync.reopenConflict}>
+            Choose calendar
+          </Button>
+        ) : (
+          <Button size="sm" onClick={sync.syncNow} disabled={sync.status === 'syncing'}>
+            <RefreshCw className="size-4" /> Sync now
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={() => void sync.signOut()}>
           <LogOut className="size-4" /> Sign out
         </Button>

@@ -199,6 +199,26 @@ describe('Sync across devices', () => {
     expect(cloud.row!.version).toBe(3);
   });
 
+  it('closing the question keeps this device\'s calendar and waits for a choice', async () => {
+    const user = userEvent.setup();
+    const account = { ...createEmptyData(), tasks: [{ id: 't1', title: 'From my account', dueDate: '2026-11-06', estimateMinutes: 60, createdAt: '2026-11-01T00:00:00.000Z' }] };
+    const cloud = memoryStore({ data: account, version: 3 });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(createSampleData('2026-11-02')));
+    renderWithSync(fakeBackend(cloud, ME).backend);
+
+    await screen.findByRole('dialog', { name: 'Which calendar do you want to keep?' });
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('From my account')).not.toBeInTheDocument();
+    expect(taskTitles(JSON.parse(localStorage.getItem(STORAGE_KEY)!))).toContain('Reply to internship recruiter');
+    expect(cloud.row!.version).toBe(3);
+
+    // The account card offers the question again.
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.click(screen.getByRole('button', { name: 'Choose calendar' }));
+    expect(screen.getByRole('dialog', { name: 'Which calendar do you want to keep?' })).toBeInTheDocument();
+  });
+
   it("can keep this device's calendar instead", async () => {
     const user = userEvent.setup();
     const cloud = memoryStore({ data: { ...createEmptyData(), weeklyHours: createEmptyData().weeklyHours.map(() => []) }, version: 1 });
