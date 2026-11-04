@@ -69,6 +69,22 @@ describe('mergeAppData', () => {
     expect(merged.tasks).toHaveLength(phone.tasks.length);
   });
 
+  it('keeps a repeating task stopped on one device while the other moved on to a new day', () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const id = base.series![0]!.id;
+    // On Tuesday the laptop adds next Monday's day, while the phone stops the task.
+    const laptop = reducer(base, { type: 'series/fill', today: '2026-11-03' });
+    const phone = reducer(base, { type: 'series/stop', id, today: '2026-11-03' });
+    for (const merged of [mergeAppData(base, laptop, phone), mergeAppData(base, phone, laptop)]) {
+      expect(merged.series).toEqual([]);
+      expect(merged.tasks.filter((t) => t.dueDate >= '2026-11-03')).toEqual([]);
+    }
+    // A real edit on the laptop still wins over the stop.
+    const edited = reducer(laptop, { type: 'series/update', id, draft: { ...draft, title: 'Spanish' }, today: '2026-11-03' });
+    expect(mergeAppData(base, edited, phone).series?.map((s) => s.title)).toEqual(['Spanish']);
+  });
+
   it('keeps one copy of a day made twice before ids matched, with its logged time', () => {
     const copy = (id: string): Task => ({ ...task(id, 'Study'), dueDate: '2026-11-05', seriesId: 's1' });
     const base = createEmptyData();

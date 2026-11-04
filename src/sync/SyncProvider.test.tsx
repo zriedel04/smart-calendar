@@ -57,10 +57,10 @@ function memorySyncState() {
   };
 }
 
-function renderWithSync(backend: SyncBackend) {
+function renderWithSync(backend: SyncBackend, syncState = memorySyncState()) {
   return render(
     <StoreProvider>
-      <SyncProvider backend={backend} syncState={memorySyncState()}>
+      <SyncProvider backend={backend} syncState={syncState}>
         <App />
       </SyncProvider>
     </StoreProvider>,
@@ -117,6 +117,30 @@ describe('Sync across devices', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByRole('button', { name: 'Email me a sign-in link' })).toBeInTheDocument();
     expect(taskTitles(JSON.parse(localStorage.getItem(STORAGE_KEY)!))).toContain('Added on the laptop');
+  });
+
+  it("doesn't upload this tab's older calendar when another tab saved a newer checkpoint first", async () => {
+    const user = userEvent.setup();
+    const cloud = memoryStore();
+    const fake = fakeBackend(cloud, ME);
+    const shared = memorySyncState();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(createSampleData('2026-11-02')));
+    renderWithSync(fake.backend, shared);
+    await waitFor(() => expect(cloud.row?.version).toBe(1));
+
+    // Another tab syncs a task from the laptop and saves its checkpoint, but this tab hasn't
+    // received that tab's calendar yet.
+    const fromOtherTab = structuredClone(cloud.row!.data);
+    fromOtherTab.tasks.push({ ...fromOtherTab.tasks[0]!, id: 'from-laptop', title: 'Added on the laptop' });
+    cloud.saveFromElsewhere(fromOtherTab);
+    shared.save(ME.id, { version: cloud.row!.version, base: fromOtherTab });
+
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.click(screen.getByRole('button', { name: 'Sync now' }));
+    await waitFor(() => expect(screen.getByText(/^Synced/)).toBeInTheDocument());
+    expect(taskTitles(cloud.row?.data)).toContain('Added on the laptop');
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByText('Added on the laptop')).toBeInTheDocument();
   });
 
   it("asks which calendar to keep when this device and the account both have one", async () => {

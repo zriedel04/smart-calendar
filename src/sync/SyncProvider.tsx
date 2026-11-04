@@ -45,6 +45,25 @@ export function SyncProvider({
   const running = useRef(false);
   const again = useRef(false);
   const knownVersion = useRef<number | null>(null);
+  // Each open tab keeps its own checkpoint, paired with the calendar it actually holds. Another tab
+  // can save a newer one before this tab has received that tab's calendar; using that newer
+  // checkpoint with this tab's older calendar would upload the old calendar without merging.
+  // The saved copy is only read once, when this tab first needs it.
+  const checkpoints = useRef(new Map<string, SyncState | null>());
+  const checkpoint = useCallback(
+    (userId: string) => {
+      if (!checkpoints.current.has(userId)) checkpoints.current.set(userId, syncState.load(userId));
+      return checkpoints.current.get(userId) ?? null;
+    },
+    [syncState],
+  );
+  const setCheckpoint = useCallback(
+    (userId: string, state: SyncState | null) => {
+      checkpoints.current.set(userId, state);
+      syncState.save(userId, state);
+    },
+    [syncState],
+  );
 
   /** One pass: fetch, merge, save. Returns true if edits came in meanwhile and another pass is needed. */
   const syncOnce = useCallback(
@@ -52,7 +71,7 @@ export function SyncProvider({
       setStatus('syncing');
       try {
         const local = dataRef.current;
-        const result = await syncCalendar(backend.store(current.id), local, syncState.load(current.id), choice);
+        const result = await syncCalendar(backend.store(current.id), local, checkpoint(current.id), choice);
         if (userRef.current?.id !== current.id) return false; // Signed out while saving.
         if (result.kind === 'choose') {
           setConflict(result.remote);
@@ -60,7 +79,7 @@ export function SyncProvider({
           return false;
         }
         setConflict(null);
-        syncState.save(current.id, result.state);
+        setCheckpoint(current.id, result.state);
         knownVersion.current = result.state.version;
         // Edits made while the sync was in flight are kept and saved on the next pass.
         const latest = dataRef.current;
@@ -78,7 +97,7 @@ export function SyncProvider({
         return false;
       }
     },
-    [backend, syncState, dispatch],
+    [backend, checkpoint, setCheckpoint, dispatch],
   );
 
   const run = useCallback(
@@ -131,11 +150,11 @@ export function SyncProvider({
   // Save changes made on this device, a moment after the last one.
   useEffect(() => {
     if (!user || conflict) return;
-    const saved = syncState.load(user.id);
+    const saved = checkpoint(user.id);
     if (saved && sameData(data, saved.base)) return;
     const timer = window.setTimeout(() => void run(), SAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [data, user, conflict, syncState, run]);
+  }, [data, user, conflict, checkpoint, run]);
 
   // Catch up when coming back to the app or back online.
   useEffect(() => {
@@ -165,7 +184,7 @@ export function SyncProvider({
         const current = userRef.current;
         await backend.signOut();
         // This device keeps its calendar; signing in again starts with a fresh first sync.
-        if (current) syncState.save(current.id, null);
+        if (current) setCheckpoint(current.id, null);
         setUser(null);
       },
       resolveConflict: (choice) => {
@@ -174,7 +193,7 @@ export function SyncProvider({
       },
       syncNow: () => void run(),
     }),
-    [status, user, lastSynced, error, conflict, backend, syncState, run],
+    [status, user, lastSynced, error, conflict, backend, setCheckpoint, run],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
