@@ -113,6 +113,30 @@ describe('mergeAppData', () => {
     }
   });
 
+  it('gives a new day the details of a repeating task renamed on the other device', () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const id = base.series![0]!.id;
+    const laptop = reducer(base, { type: 'series/fill', today: '2026-11-03' });
+    const phone = reducer(base, { type: 'series/update', id, draft: { ...draft, title: 'Spanish' }, today: '2026-11-03' });
+    for (const merged of [mergeAppData(base, laptop, phone), mergeAppData(base, phone, laptop)]) {
+      const filled = reducer(merged, { type: 'series/fill', today: '2026-11-04' });
+      const monday = filled.tasks.filter((t) => t.dueDate === '2026-11-09');
+      expect(monday.map((t) => t.title)).toEqual(['Spanish']);
+    }
+  });
+
+  it('keeps a skip taken back with Undo while the skip was syncing', () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const before = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const friday = before.tasks.find((t) => t.dueDate === '2026-11-06')!;
+    const skipped = reducer(before, { type: 'task/skip', id: friday.id });
+    // The skip was saved; meanwhile Undo brought Friday back on this device.
+    const merged = mergeAppData(skipped, before, skipped);
+    expect(merged.series![0]!.skipped).toBeUndefined();
+    expect(merged.tasks.some((t) => t.id === friday.id)).toBe(true);
+  });
+
   it('keeps a day skipped on one device while the other moved on to a new day', () => {
     const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
     const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });

@@ -1,4 +1,5 @@
 import { weekdayOf } from '../lib/dates';
+import { copyOf } from '../state/recurring';
 import type { AppData, Task, TaskSeries } from '../state/types';
 
 /** True if two JSON-like values hold the same data, whatever order their keys are in. */
@@ -124,17 +125,20 @@ function dropCopiesOfStoppedSeries(base: AppData, data: AppData) {
 }
 
 /**
- * Skipping a day is the user's choice, but merging a series ignores `skipped` so that the app's own
- * tidying of it isn't treated as an edit. Days skipped on either device stay skipped. Passed days
- * are tidied away again the next time the app fills the series.
+ * Merging a series ignores `skipped`, so that the app tidying away passed days isn't treated as an
+ * edit. Skipped days are merged day by day against the base instead: a day skipped on either device
+ * stays skipped, and a skip taken back (with Undo) or tidied away stays gone.
  */
-function keepAllSkips(local: AppData, remote: AppData, data: AppData) {
-  const skipsOf = (d: AppData) => new Map((d.series ?? []).map((s) => [s.id, s.skipped ?? []]));
+function mergeSkips(base: AppData, local: AppData, remote: AppData, data: AppData) {
+  const skipsOf = (d: AppData) => new Map((d.series ?? []).map((s) => [s.id, new Set(s.skipped ?? [])]));
+  const b = skipsOf(base);
   const l = skipsOf(local);
   const r = skipsOf(remote);
   data.series = data.series?.map((s) => {
     const { skipped: _skipped, ...rest } = s;
-    const skipped = [...new Set([...(l.get(s.id) ?? []), ...(r.get(s.id) ?? [])])].sort();
+    const [bs, ls, rs] = [b.get(s.id), l.get(s.id), r.get(s.id)];
+    const days = new Set([...(bs ?? []), ...(ls ?? []), ...(rs ?? [])]);
+    const skipped = [...days].filter((d) => pick(bs?.has(d) ?? false, ls?.has(d) ?? rs?.has(d) ?? false, rs?.has(d) ?? ls?.has(d) ?? false)).sort();
     return skipped.length ? { ...rest, skipped } : rest;
   });
 }
@@ -158,26 +162,23 @@ function keepStartedCopies(local: AppData, remote: AppData, data: AppData) {
 }
 
 /**
- * One device made new days for a repeating task while the other changed it, say to Tuesdays only.
- * New days that no longer fit the merged task (wrong weekday, outside its dates, or old details)
- * are dropped unless you started or finished them. Filling the series makes the right ones.
+ * One device made new days for a repeating task while the other changed it, say renamed it or moved
+ * it to Tuesdays only. A new day that's no longer on the task's schedule is dropped; one that still
+ * is gets the task's current details. Days you started or finished are left alone.
  */
-function dropCopiesThatDontFit(base: AppData, data: AppData) {
+function fitCopiesToSeries(base: AppData, data: AppData) {
   const seriesById = new Map((data.series ?? []).map((s) => [s.id, s]));
   const inBase = new Set(base.tasks.map((t) => t.id));
   const started = new Set([...data.logs.map((l) => l.taskId), ...(data.timer ? [data.timer.taskId] : [])]);
-  const fits = (t: Task, s: TaskSeries) =>
-    s.days.includes(weekdayOf(t.dueDate)) &&
-    t.dueDate >= s.startDate &&
-    (!s.until || t.dueDate <= s.until) &&
-    !s.skipped?.includes(t.dueDate) &&
-    t.title === s.title &&
-    t.estimateMinutes === s.estimateMinutes &&
-    (t.notes ?? '') === (s.notes ?? '');
-  data.tasks = data.tasks.filter((t) => {
+  const onSchedule = (date: string, s: TaskSeries) =>
+    s.days.includes(weekdayOf(date)) && date >= s.startDate && (!s.until || date <= s.until) && !s.skipped?.includes(date);
+  const tasks: Task[] = [];
+  for (const t of data.tasks) {
     const s = t.seriesId ? seriesById.get(t.seriesId) : undefined;
-    return !s || inBase.has(t.id) || t.completedAt || started.has(t.id) || fits(t, s);
-  });
+    if (!s || inBase.has(t.id) || t.completedAt || started.has(t.id)) tasks.push(t);
+    else if (onSchedule(t.dueDate, s)) tasks.push({ ...copyOf(s, t.dueDate, t.createdAt), id: t.id });
+  }
+  data.tasks = tasks;
 }
 
 /**
@@ -201,11 +202,11 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   const timer = pick(base.timer, local.timer, remote.timer);
   if (timer) merged.timer = timer;
 
-  keepAllSkips(local, remote, merged);
+  mergeSkips(base, local, remote, merged);
   keepStartedCopies(local, remote, merged);
   dedupeCopies(merged);
   dropCopiesOfStoppedSeries(base, merged);
-  dropCopiesThatDontFit(base, merged);
+  fitCopiesToSeries(base, merged);
 
   // Work logged or a timer running on a task deleted on the other device would point at nothing.
   const taskIds = new Set(merged.tasks.map((t) => t.id));

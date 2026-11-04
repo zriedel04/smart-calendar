@@ -32,7 +32,8 @@ export function nextSeriesDate(series: TaskSeries, today: ISODate): ISODate | nu
 /** A day's copy has the same id on every device, so two devices filling the same week don't make it twice. */
 export const copyId = (seriesId: string, date: ISODate) => `${seriesId}@${date}`;
 
-function copyOf(series: TaskSeries, date: ISODate, createdAt: string): Task {
+/** A repeating task's item for one day. */
+export function copyOf(series: TaskSeries, date: ISODate, createdAt: string): Task {
   return {
     id: copyId(series.id, date),
     title: series.title,
