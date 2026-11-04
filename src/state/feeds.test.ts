@@ -152,6 +152,28 @@ describe('calendar links', () => {
     expect(data.tasks[0]).not.toHaveProperty('feedId');
   });
 
+  it('leaves what a link added untied when one device removes the link and the other refreshes it', () => {
+    const base = apply(withFeed(), [assignment('a1', 'Essay 2', '2026-11-06'), lecture('l1', '2026-11-03')]);
+    const phone = reducer(base, { type: 'feed/remove', id: 'f1' });
+    const laptop = apply(base, [assignment('a1', 'Essay 2', '2026-11-09'), lecture('l1', '2026-11-03', 660)]);
+    const merged = mergeAppData(base, laptop, phone);
+    expect(merged.feeds).toBeUndefined();
+    expect([...merged.tasks, ...merged.events].filter((i) => 'feedId' in i || 'sourceStamp' in i || 'sourceKey' in i)).toEqual([]);
+    // Adding the link again takes the items over instead of adding them twice.
+    const readded = reducer(merged, { type: 'feed/add', feed: { ...FEED, id: 'f2' } });
+    const again = reducer(readded, { type: 'feed/apply', id: 'f2', entries: [assignment('a1', 'Essay 2', '2026-11-09'), lecture('l1', '2026-11-03', 660)], today: TODAY, at: NOW });
+    expect(again.tasks).toHaveLength(1);
+    expect(again.events).toHaveLength(1);
+  });
+
+  it("doesn't bring back a one-off event you deleted when the link moves it to another date", () => {
+    const talk = (date: string): IcsEntry => ({ ...lecture('t1', date), title: 'Guest talk', repeat: 'none', until: undefined });
+    let data = apply(withFeed(), [talk('2026-11-05')]);
+    data = reducer(data, { type: 'event/delete', id: data.events[0]!.id });
+    data = apply(data, [talk('2026-11-12')]);
+    expect(data.events).toEqual([]);
+  });
+
   it('adds each item once when two devices refresh the same link before syncing', () => {
     const base = withFeed();
     const entries = [assignment('a1', 'Essay 2', '2026-11-06'), lecture('l1', '2026-11-03')];

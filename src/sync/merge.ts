@@ -1,7 +1,7 @@
 import { weekdayOf } from '../lib/dates';
 import { copyOf } from '../state/recurring';
 import type { CalendarEvent } from '../lib/availability';
-import { dismissKey } from '../state/feeds';
+import { detachFromFeed, dismissKey } from '../state/feeds';
 import type { AppData, Task, TaskSeries } from '../state/types';
 
 /** True if two JSON-like values hold the same data, whatever order their keys are in. */
@@ -228,6 +228,13 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   const timer = pick(base.timer, local.timer, remote.timer);
   if (timer) merged.timer = timer;
   const feeds = mergeFeeds(base, local, remote);
+  // A link removed on one device leaves what it added behind, as removing it does there, even if
+  // the other device refreshed those items meanwhile.
+  const feedIds = new Set(feeds.map((f) => f.id));
+  const detach = <T extends Task | CalendarEvent>(item: T): T =>
+    item.feedId && !feedIds.has(item.feedId) ? detachFromFeed(item) : item;
+  merged.tasks = merged.tasks.map(detach);
+  merged.events = merged.events.map(detach);
   if (feeds.length) {
     merged.feeds = feeds;
     // An item from a link deleted on one device stays deleted, even if the other refreshed it meanwhile.

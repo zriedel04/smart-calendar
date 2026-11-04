@@ -4,7 +4,7 @@ import type { TimeRange } from '../lib/time';
 import { createId } from './ids';
 import { fillSeries, startedTaskIds } from './recurring';
 import type { IcsEntry } from '../lib/ics';
-import { applyFeed, dismissFromFeed } from './feeds';
+import { applyFeed, detachFromFeed, dismissFromFeed } from './feeds';
 import type { AppData, CalendarFeed, Task, TaskSeries } from './types';
 
 export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes' | 'sourceId' | 'planDate'>;
@@ -294,11 +294,7 @@ function apply(state: AppData, action: Action): AppData {
       return { ...state, feeds: [...(state.feeds ?? []), action.feed] };
     case 'feed/remove': {
       // What the link added stays, as if imported from a file, but is no longer kept up to date.
-      const detach = <T extends { feedId?: string; sourceStamp?: string }>(item: T): T => {
-        if (item.feedId !== action.id) return item;
-        const { feedId: _feed, sourceStamp: _stamp, sourceKey: _key, ...rest } = item as T & { sourceKey?: string };
-        return rest as T;
-      };
+      const detach = <T extends Task | CalendarEvent>(item: T): T => (item.feedId === action.id ? detachFromFeed(item) : item);
       const feeds = (state.feeds ?? []).filter((f) => f.id !== action.id);
       const { feeds: _feeds, ...rest } = state;
       return { ...rest, ...(feeds.length ? { feeds } : {}), tasks: state.tasks.map(detach), events: state.events.map(detach) };

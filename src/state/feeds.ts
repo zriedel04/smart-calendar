@@ -110,8 +110,12 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
     }
 
     // Each event is known by its run's first date and its day within the run, not by its position,
-    // so a run added or dropped at the source doesn't shift the others.
-    const keyed = runs.flatMap((run) => toEventDrafts(run).map((d, day) => ({ d, key: `${uid}:${run.date}+${day}` })));
+    // so a run added or dropped at the source doesn't shift the others. A one-off event is known by
+    // its day alone, so one deleted here stays deleted when it's moved to another date at the source.
+    const oneOff = runs.length === 1 && first.repeat === 'none';
+    const keyed = runs.flatMap((run) =>
+      toEventDrafts(run).map((d, day) => ({ d, key: `${uid}:${oneOff ? '' : run.date}+${day}` })),
+    );
     const drafts = keyed.map((k) => k.d);
     const stamp = JSON.stringify(drafts);
     const group = events.filter((e) => e.sourceId === uid && ours(e));
@@ -131,7 +135,7 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
         // so deleting one later is remembered.
         const ordered = [...group].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
         const keys = [...keyed].sort((a, b) => a.d.date.localeCompare(b.d.date) || a.d.start - b.d.start).map((k) => k.key);
-        const keyOf = new Map(ordered.map((e, i) => [e, keys[i] ?? `${uid}:${e.date}+0`]));
+        const keyOf = new Map(ordered.map((e, i) => [e, keys[i] ?? `${uid}:${oneOff ? '' : e.date}+0`]));
         events = events.map((e) => (keyOf.has(e) ? { ...e, feedId: feed.id, sourceStamp: stamp, sourceKey: keyOf.get(e)! } : e));
         changed = true;
       } else if (group.some((e) => e.sourceStamp !== stamp)) {
@@ -166,6 +170,13 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
 }
 
 /** Remembers an item from a link that you deleted, so the next refresh doesn't add it again. */
+/** The item as if imported from a file: kept, but no longer tied to a link. */
+export function detachFromFeed<T extends Task | CalendarEvent>(item: T): T {
+  const { feedId: _feed, sourceStamp: _stamp, ...rest } = item;
+  if ('sourceKey' in rest) delete (rest as { sourceKey?: string }).sourceKey;
+  return rest as T;
+}
+
 export function dismissFromFeed(data: AppData, item: Task | CalendarEvent): CalendarFeed[] | undefined {
   if (!item.feedId || !item.sourceId || !data.feeds) return data.feeds;
   const key = dismissKey(item);
