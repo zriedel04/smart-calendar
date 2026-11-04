@@ -34,13 +34,19 @@ export function eventTime(event: CalendarEvent): string {
   return event.allDay ? 'All day' : formatRange(event);
 }
 
-/** "Every Tuesday", "Every year on Mar 14", or the date. */
+/** "Every Tuesday", "Every month on the 15th", "Every year on Mar 14", or the date. */
 export function eventRepeatLabel(event: CalendarEvent): string {
   const until = event.until ? ` until ${formatDate(event.until, { month: 'short', day: 'numeric' })}` : '';
   if (event.repeat === 'weekly') return `Every ${WEEKDAY_NAMES[weekdayOf(event.date)]}${until}`;
+  if (event.repeat === 'monthly') return `Every month on the ${ordinal(Number(event.date.slice(8)))}${until}`;
   if (event.repeat === 'yearly') {
     const last = event.until ? ` until ${event.until.slice(0, 4)}` : '';
     return `Every year on ${formatDate(event.date, { month: 'short', day: 'numeric' })}${last}`;
   }
   return formatDate(event.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function ordinal(n: number): string {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+  return `${n}${suffix}`;
 }

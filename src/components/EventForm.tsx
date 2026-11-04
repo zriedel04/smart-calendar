@@ -174,6 +174,7 @@ export function EventForm({
               >
                 <option value="none">Doesn't repeat</option>
                 <option value="weekly">Every week</option>
+                <option value="monthly">Every month</option>
                 <option value="yearly">Every year</option>
               </select>
             )}

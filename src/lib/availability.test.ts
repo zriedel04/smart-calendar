@@ -110,4 +110,16 @@ describe('availability', () => {
     expect(eventOccursOn(lecture, '2026-11-17')).toBe(true);
     expect(eventOccursOn(lecture, '2026-11-24')).toBe(false);
   });
+
+  it('repeats monthly on the same day, or the last day of shorter months', () => {
+    const rent = event({ date: '2026-01-31', repeat: 'monthly', allDay: true });
+    expect(eventOccursOn(rent, '2026-02-28')).toBe(true);
+    expect(eventOccursOn(rent, '2026-03-31')).toBe(true);
+    expect(eventOccursOn(rent, '2026-03-30')).toBe(false);
+    expect(eventOccursOn(rent, '2026-04-30')).toBe(true);
+    const club = event({ date: '2026-11-15', repeat: 'monthly' });
+    expect(eventOccursOn(club, '2026-12-15')).toBe(true);
+    expect(eventOccursOn(club, '2026-12-16')).toBe(false);
+    expect(eventOccursOn(club, '2026-10-15')).toBe(false);
+  });
 });

@@ -10,7 +10,7 @@ export type DateOverrides = Readonly<Record<ISODate, readonly TimeRange[]>>;
 /** What an event is, which sets its icon and color. */
 export type EventKind = 'busy' | 'plan' | 'birthday' | 'other';
 
-export type EventRepeat = 'none' | 'weekly' | 'yearly';
+export type EventRepeat = 'none' | 'weekly' | 'monthly' | 'yearly';
 
 /** Something on your calendar that isn't a task: a class, a shift, plans with friends, a birthday. */
 export interface CalendarEvent {
@@ -44,6 +44,10 @@ export function eventBlocksWork(event: CalendarEvent): boolean {
   return event.blocksWork ?? !event.allDay;
 }
 
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 function isLeapYear(year: number): boolean {
   return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 }
@@ -59,6 +63,14 @@ export function eventOccursOn(event: CalendarEvent, date: ISODate): boolean {
   if (diff < 0) return false;
   if (event.until && date > event.until) return false;
   if (event.repeat === 'weekly') return diff % 7 === 0;
+  if (event.repeat === 'monthly') {
+    const day = Number(event.date.slice(8));
+    const target = Number(date.slice(8));
+    if (target === day) return true;
+    // On the 29th to 31st, months that are too short get it on their last day instead.
+    const lastDay = daysInMonth(Number(date.slice(0, 4)), Number(date.slice(5, 7)));
+    return day > lastDay && target === lastDay;
+  }
   if (event.repeat === 'yearly') {
     const monthDay = event.date.slice(5);
     if (date.slice(5) === monthDay) return true;

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { eventKind, eventsOn, type CalendarEvent } from '../lib/availability';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
 import { priorityOf, type Priority } from '../lib/priority';
-import { formatDuration } from '../lib/time';
+import { formatDuration, formatRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { EVENT_CHIP, EVENT_DOT, eventTime } from '../components/eventStyles';
 import { PRIORITY_DOT } from '../components/styles';
@@ -184,13 +184,13 @@ export function MonthView({
                   {shownEvents.map((e) => (
                     <span
                       key={e.id}
-                      className={cx(
-                        'flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11px] leading-tight',
-                        EVENT_CHIP[eventKind(e)],
-                      )}
+                      className={cx('flex flex-col rounded px-1 py-0.5 text-[11px] leading-tight', EVENT_CHIP[eventKind(e)])}
                     >
-                      <EventIcon event={e} className="size-2.5" />
-                      <span className="truncate">{e.title}</span>
+                      <span className="flex min-w-0 items-center gap-1">
+                        <EventIcon event={e} className="size-2.5" />
+                        <span className="truncate">{e.title}</span>
+                      </span>
+                      {!e.allDay && <span className="truncate pl-3.5 text-[10px] tabular-nums opacity-75">{formatRange(e)}</span>}
                     </span>
                   ))}
                   {shown.map((e) => (

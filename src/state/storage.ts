@@ -129,7 +129,7 @@ export function parseAppData(json: string): AppData {
           typeof e.title === 'string' &&
           isISODate(e.date) &&
           isRange(e) &&
-          (e.repeat === 'none' || e.repeat === 'weekly' || e.repeat === 'yearly') &&
+          (e.repeat === 'none' || e.repeat === 'weekly' || e.repeat === 'monthly' || e.repeat === 'yearly') &&
           (e.kind === undefined || EVENT_KINDS.includes(e.kind as EventKind)) &&
           (e.until === undefined || isISODate(e.until)) &&
           (e.allDay === undefined || typeof e.allDay === 'boolean') &&

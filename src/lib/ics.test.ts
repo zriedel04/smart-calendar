@@ -153,4 +153,11 @@ describe('parseIcs', () => {
       ['2026-11-02', 0, 2 * 60],
     ]);
   });
+
+  it('imports monthly entries, keeping just the first date for the 29th to 31st', () => {
+    const [club] = parseIcs(calendar('UID:m1\r\nSUMMARY:Book club\r\nDTSTART:20261115T190000\r\nDTEND:20261115T200000\r\nRRULE:FREQ=MONTHLY;COUNT=3'));
+    expect(club).toMatchObject({ repeat: 'monthly', date: '2026-11-15', until: '2027-01-15' });
+    const [rent] = parseIcs(calendar('UID:m2\r\nSUMMARY:Rent\r\nDTSTART;VALUE=DATE:20261031\r\nRRULE:FREQ=MONTHLY'));
+    expect(rent?.repeat).toBe('none');
+  });
 });

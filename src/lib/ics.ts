@@ -132,7 +132,7 @@ const ICS_WEEKDAYS: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4
 /**
  * Parses the text of an .ics file into entries. Cancelled entries and one-off changes to a
  * repeating series are left out. Weekly entries on several days (a Mon/Wed/Fri class) become
- * one weekly entry per day. Repeat rules other than weekly and yearly are imported as a single date.
+ * one weekly entry per day. Repeat rules other than weekly, monthly and yearly are imported as a single date.
  */
 export function parseIcs(text: string, now: Date = new Date()): IcsEntry[] {
   const lines = text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
@@ -231,7 +231,8 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
     if (k && v) rule[k.toUpperCase()] = v.toUpperCase();
   }
   if (rule.INTERVAL && rule.INTERVAL !== '1') return [base];
-  if (rule.FREQ !== 'YEARLY' && rule.FREQ !== 'WEEKLY') return [base];
+  if (rule.FREQ !== 'YEARLY' && rule.FREQ !== 'MONTHLY' && rule.FREQ !== 'WEEKLY') return [base];
+  const byDate = rule.FREQ !== 'WEEKLY'; // Monthly and yearly repeat on the start's day of the month.
 
   // Selectors the app can't represent, such as "the 4th Thursday of November", keep just the first date
   // rather than guessing at a pattern. A month or day that only restates the start date is fine.
@@ -243,7 +244,9 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
     !restatesStart ||
     ['BYYEARDAY', 'BYWEEKNO', 'BYSETPOS', 'BYHOUR', 'BYMINUTE'].some((k) => rule[k]) ||
     (rule.FREQ === 'YEARLY' && rule.BYDAY) ||
-    (rule.FREQ === 'WEEKLY' && rule.BYMONTH);
+    (rule.FREQ === 'WEEKLY' && rule.BYMONTH) ||
+    // Monthly on the 29th to 31st skips short months in .ics files but not in the app, so keep just the first date.
+    (rule.FREQ === 'MONTHLY' && (rule.BYDAY || rule.BYMONTH || Number(sourceDate.slice(8, 10)) > 28));
   if (unsupported) return [base];
 
   // Repeat rules describe dates and times in the entry's own time zone. Each occurrence is converted
@@ -292,12 +295,12 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
   for (let i = 0, d = sourceDate; i < 20000; i++) {
     if (counted && seen >= count) break;
     if (!bounded && d > horizon) break;
-    const inSeries = rule.FREQ === 'YEARLY' ? true : weekdays.includes(weekdayOf(d));
+    const inSeries = byDate || weekdays.includes(weekdayOf(d));
     const moment = inSeries ? occurrenceAt(d) : null;
     if (moment) {
       if (untilInstant !== null && moment.instant > untilInstant) break;
       seen++;
-      const series = runs.get(rule.FREQ === 'YEARLY' ? weekdays[0]! : weekdayOf(d))!;
+      const series = runs.get(byDate ? weekdays[0]! : weekdayOf(d))!;
       const run = series[series.length - 1];
       if (excluded.has(moment.instant)) {
         if (run) run.broken = true;
@@ -308,10 +311,15 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
         else series.push({ first: moment.date, last: moment.date, start: startAt, end: endAt, broken: false });
       }
     }
-    d = rule.FREQ === 'YEARLY' ? `${Number(d.slice(0, 4)) + 1}${sourceDate.slice(4)}` : addDays(d, 1);
+    d =
+      rule.FREQ === 'YEARLY'
+        ? `${Number(d.slice(0, 4)) + 1}${sourceDate.slice(4)}`
+        : rule.FREQ === 'MONTHLY'
+          ? nextMonth(d, sourceDate)
+          : addDays(d, 1);
   }
 
-  const repeat: EventRepeat = rule.FREQ === 'YEARLY' ? 'yearly' : 'weekly';
+  const repeat: EventRepeat = rule.FREQ === 'YEARLY' ? 'yearly' : rule.FREQ === 'MONTHLY' ? 'monthly' : 'weekly';
   const span = daysBetween(base.date, base.endDate);
   const entries: IcsEntry[] = [];
   for (const series of runs.values()) {
@@ -329,4 +337,10 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
     });
   }
   return entries.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** The same day of the month as `start`, one month after `date`. */
+function nextMonth(date: ISODate, start: ISODate): ISODate {
+  const index = Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)); // The next month, counting months from 1.
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}${start.slice(7)}`;
 }

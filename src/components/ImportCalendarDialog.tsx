@@ -22,7 +22,7 @@ function whenLabel(row: Row): string {
   const { entry } = row;
   const date = formatDate(entry.date, { weekday: 'short', month: 'short', day: 'numeric' });
   if (row.as === 'task') return `Due ${date}`;
-  const repeat = entry.repeat === 'weekly' ? 'Weekly from ' : entry.repeat === 'yearly' ? 'Yearly from ' : '';
+  const repeat = { none: '', weekly: 'Weekly from ', monthly: 'Monthly from ', yearly: 'Yearly from ' }[entry.repeat];
   const span =
     entry.allDay && entry.endDate > entry.date
       ? ` to ${formatDate(entry.endDate, { month: 'short', day: 'numeric' })}`

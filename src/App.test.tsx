@@ -137,6 +137,8 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Month' }));
 
     expect(screen.getByRole('heading', { name: 'November 2026' })).toBeInTheDocument();
+    // A timed event shows its time under its title in the day's cell.
+    expect(screen.getByRole('button', { name: 'Monday, November 2' })).toHaveTextContent(/Team standup\s*1pm – 1:30pm/);
     // Today (Monday, Nov 2) is selected: its planned work is listed below the grid.
     const checkbox = screen.getByRole('checkbox', { name: 'Check off "Reply to internship recruiter"' });
     await user.click(checkbox);
