@@ -5,6 +5,7 @@ import { DayHoursDialog } from './components/DayHoursDialog';
 import { EventForm } from './components/EventForm';
 import { ImportCalendarDialog } from './components/ImportCalendarDialog';
 import { TaskForm } from './components/TaskForm';
+import { TimerBar } from './components/TimerBar';
 import { UndoToast } from './components/UndoToast';
 import { cx } from './components/cx';
 import { Button } from './components/ui';
@@ -124,6 +125,7 @@ export default function App() {
             ))}
           </ul>
         </nav>
+        <TimerBar />
       </header>
 
       <main className="mx-auto max-w-4xl px-4 pt-5 pb-28">

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatClock,
   formatDuration,
+  formatStopwatch,
   normalizeRanges,
   parseTime,
   subtractRanges,
@@ -64,5 +65,12 @@ describe('time', () => {
 
   it('adds up minutes', () => {
     expect(totalMinutes([{ start: h(12), end: h(14) }, { start: h(15), end: h(16) + 30 }])).toBe(210);
+  });
+
+  it('formats a running timer', () => {
+    expect(formatStopwatch(0)).toBe('0:00');
+    expect(formatStopwatch(247.9)).toBe('4:07');
+    expect(formatStopwatch(3765)).toBe('1:02:45');
+    expect(formatStopwatch(-5)).toBe('0:00');
   });
 });

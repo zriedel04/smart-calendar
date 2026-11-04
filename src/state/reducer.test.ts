@@ -138,4 +138,58 @@ describe('hasUserData', () => {
       ),
     ).toBe(true);
   });
+
+  describe('timer', () => {
+    const at = (minutes: number, seconds = 0) => new Date(Date.UTC(2026, 10, 2, 19, minutes, seconds)).toISOString();
+    const withTwoTasks = () => {
+      let state = reducer(createEmptyData(), { type: 'task/add', draft });
+      state = reducer(state, { type: 'task/add', draft: { ...draft, title: 'Lab' } });
+      return { state, essay: state.tasks[0]!.id, lab: state.tasks[1]!.id };
+    };
+
+    it('logs whole minutes when stopped, and nothing for under a minute', () => {
+      let { state, essay } = withTwoTasks();
+      state = reducer(state, { type: 'timer/start', taskId: essay, at: at(0), date: '2026-11-02' });
+      expect(parseAppData(JSON.stringify(state)).timer).toEqual({ taskId: essay, startedAt: at(0) });
+      state = reducer(state, { type: 'timer/stop', at: at(25, 50), date: '2026-11-02' });
+      expect(state).not.toHaveProperty('timer');
+      expect(state.logs).toMatchObject([{ taskId: essay, date: '2026-11-02', minutes: 25 }]);
+
+      state = reducer(state, { type: 'timer/start', taskId: essay, at: at(30), date: '2026-11-02' });
+      state = reducer(state, { type: 'timer/stop', at: at(30, 59), date: '2026-11-02' });
+      expect(state.logs).toHaveLength(1);
+      expect(state).not.toHaveProperty('timer');
+    });
+
+    it('logs the running timer when you start one on another task', () => {
+      let { state, essay, lab } = withTwoTasks();
+      state = reducer(state, { type: 'timer/start', taskId: essay, at: at(0), date: '2026-11-02' });
+      expect(reducer(state, { type: 'timer/start', taskId: essay, at: at(5), date: '2026-11-02' })).toBe(state);
+      state = reducer(state, { type: 'timer/start', taskId: lab, at: at(10), date: '2026-11-02' });
+      expect(state.logs).toMatchObject([{ taskId: essay, minutes: 10 }]);
+      expect(state.timer).toEqual({ taskId: lab, startedAt: at(10) });
+    });
+
+    it('cancels without logging, and stops when the task is ticked, finished, deleted or skipped', () => {
+      let { state, essay } = withTwoTasks();
+      const start = (s: typeof state) => reducer(s, { type: 'timer/start', taskId: essay, at: at(0), date: '2026-11-02' });
+      state = reducer(start(state), { type: 'timer/cancel' });
+      expect(state).not.toHaveProperty('timer');
+      expect(state.logs).toHaveLength(0);
+
+      expect(reducer(start(state), { type: 'work/log', taskId: essay, date: '2026-11-02', minutes: 120 })).not.toHaveProperty('timer');
+      expect(reducer(start(state), { type: 'task/setComplete', id: essay, complete: true })).not.toHaveProperty('timer');
+      expect(reducer(start(state), { type: 'task/delete', id: essay })).not.toHaveProperty('timer');
+      const copy = { ...state, tasks: state.tasks.map((t) => (t.id === essay ? { ...t, seriesId: 's1' } : t)) };
+      expect(reducer(start(copy), { type: 'task/skip', id: essay })).not.toHaveProperty('timer');
+    });
+
+    it("doesn't load a timer for a task that isn't there", () => {
+      const { state } = withTwoTasks();
+      const saved = { ...state, timer: { taskId: 'gone', startedAt: at(0) } };
+      expect(parseAppData(JSON.stringify(saved))).not.toHaveProperty('timer');
+      const garbled = { ...state, timer: { taskId: state.tasks[0]!.id, startedAt: 'soon' } };
+      expect(parseAppData(JSON.stringify(garbled))).not.toHaveProperty('timer');
+    });
+  });
 });

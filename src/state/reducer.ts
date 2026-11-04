@@ -20,6 +20,9 @@ export type Action =
   | { type: 'task/skip'; id: string }
   | { type: 'work/log'; taskId: string; date: ISODate; minutes: number }
   | { type: 'work/undoDay'; taskId: string; date: ISODate }
+  | { type: 'timer/start'; taskId: string; at: string; date: ISODate }
+  | { type: 'timer/stop'; at: string; date: ISODate }
+  | { type: 'timer/cancel' }
   | { type: 'hours/setWeekday'; weekday: Weekday; ranges: TimeRange[] }
   | { type: 'hours/setWeek'; weeklyHours: TimeRange[][] }
   | { type: 'hours/setOverride'; date: ISODate; ranges: TimeRange[] }
@@ -34,6 +37,27 @@ export type Action =
   | { type: 'series/fill'; today: ISODate }
   | { type: 'data/replace'; data: AppData };
 
+/** Whole minutes a timer has run by `at`. */
+export function timerMinutes(startedAt: string, at: string): number {
+  return Math.max(0, Math.floor((Date.parse(at) - Date.parse(startedAt)) / 60_000));
+}
+
+/** Stops the running timer, logging its time on `date` if it ran at least a minute. */
+function stopTimer(state: AppData, at: string, date: ISODate): AppData {
+  if (!state.timer) return state;
+  const { timer, ...rest } = state;
+  const minutes = timerMinutes(timer.startedAt, at);
+  if (minutes < 1 || !state.tasks.some((t) => t.id === timer.taskId)) return rest;
+  return { ...rest, logs: [...state.logs, { id: createId(), taskId: timer.taskId, date, minutes }] };
+}
+
+/** Drops the running timer if it's on this task. */
+function withoutTimerOn(state: AppData, taskId: string): AppData {
+  if (state.timer?.taskId !== taskId) return state;
+  const { timer: _timer, ...rest } = state;
+  return rest;
+}
+
 /** Removes a series' copies from today on that you haven't started or finished. */
 function dropUpcomingCopies(state: AppData, seriesId: string, today: ISODate): Task[] {
   const started = new Set(state.logs.map((l) => l.taskId));
@@ -43,6 +67,15 @@ function dropUpcomingCopies(state: AppData, seriesId: string, today: ISODate): T
 }
 
 export function reducer(state: AppData, action: Action): AppData {
+  const next = apply(state, action);
+  // A timer can't outlive its task, such as a repeating task's day you skipped.
+  if (next.timer && next !== state && !next.tasks.some((t) => t.id === next.timer!.taskId)) {
+    return withoutTimerOn(next, next.timer.taskId);
+  }
+  return next;
+}
+
+function apply(state: AppData, action: Action): AppData {
   switch (action.type) {
     case 'task/add':
       return {
@@ -65,13 +98,13 @@ export function reducer(state: AppData, action: Action): AppData {
       };
     case 'task/delete':
       return {
-        ...state,
+        ...withoutTimerOn(state, action.id),
         tasks: state.tasks.filter((t) => t.id !== action.id),
         logs: state.logs.filter((l) => l.taskId !== action.id),
       };
     case 'task/setComplete':
       return {
-        ...state,
+        ...(action.complete ? withoutTimerOn(state, action.id) : state),
         tasks: state.tasks.map((t) => {
           if (t.id !== action.id) return t;
           if (action.complete) return { ...t, completedAt: new Date().toISOString() };
@@ -127,7 +160,8 @@ export function reducer(state: AppData, action: Action): AppData {
     case 'work/log':
       if (action.minutes <= 0) return state;
       return {
-        ...state,
+        // Logging time by hand on the timed task replaces what the timer would have logged.
+        ...withoutTimerOn(state, action.taskId),
         logs: [
           ...state.logs,
           { id: createId(), taskId: action.taskId, date: action.date, minutes: action.minutes },
@@ -145,6 +179,16 @@ export function reducer(state: AppData, action: Action): AppData {
         logs: state.logs.filter((l) => !(l.taskId === action.taskId && l.date === action.date)),
       };
     }
+    case 'timer/start': {
+      if (state.timer?.taskId === action.taskId || !state.tasks.some((t) => t.id === action.taskId)) return state;
+      // Only one timer runs at a time: starting another logs the one that was running.
+      const stopped = stopTimer(state, action.at, action.date);
+      return { ...stopped, timer: { taskId: action.taskId, startedAt: action.at } };
+    }
+    case 'timer/stop':
+      return stopTimer(state, action.at, action.date);
+    case 'timer/cancel':
+      return state.timer ? withoutTimerOn(state, state.timer.taskId) : state;
     case 'hours/setWeekday':
       return {
         ...state,

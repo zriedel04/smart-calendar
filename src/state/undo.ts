@@ -1,7 +1,7 @@
 import { formatDate } from '../lib/dates';
 import { formatDuration } from '../lib/time';
 import type { StoreAction } from './context';
-import { reducer, type Action } from './reducer';
+import { reducer, timerMinutes, type Action } from './reducer';
 import type { AppData } from './types';
 
 /** What an action did, in words for an Undo toast, or null if it isn't worth offering Undo for. */
@@ -22,6 +22,16 @@ export function undoLabel(action: Action, before: AppData): string | null {
       return action.date
         ? `Moved "${task(action.id)}" to ${formatDate(action.date, { weekday: 'short', month: 'short', day: 'numeric' })}`
         : null;
+    case 'timer/start':
+    case 'timer/stop': {
+      // Starting a timer on another task stops the running one, so that's worth undoing too.
+      const timer = before.timer;
+      if (!timer || timer.taskId === (action.type === 'timer/start' ? action.taskId : '')) return null;
+      const minutes = timerMinutes(timer.startedAt, action.at);
+      return minutes >= 1 ? `Logged ${formatDuration(minutes)} on "${task(timer.taskId)}"` : null;
+    }
+    case 'timer/cancel':
+      return before.timer ? `Stopped the timer on "${task(before.timer.taskId)}" without logging` : null;
     case 'event/delete':
       return `Deleted "${before.events.find((e) => e.id === action.id)?.title ?? 'event'}"`;
     case 'series/stop':
