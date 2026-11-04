@@ -61,16 +61,22 @@ export function fillSeries(data: AppData, today: ISODate): AppData {
   const added: Task[] = [];
   const existing = new Set(data.tasks.filter((t) => t.seriesId).map((t) => `${t.seriesId}/${t.dueDate}`));
   const series = allSeries.map((s) => {
+    // Skipped days only matter until they've passed.
+    const skipped = s.skipped?.filter((d) => d >= today);
+    const pruned = skipped && skipped.length !== s.skipped!.length;
     let from = s.filledThrough ? addDays(s.filledThrough, 1) : s.startDate;
     if (from < s.startDate) from = s.startDate;
     if (from < today) from = today;
     const to = s.until && s.until < lastDay ? s.until : lastDay;
-    if (from > to) return s;
+    if (from > to && !pruned) return s;
     for (let d = from; d <= to; d = addDays(d, 1)) {
-      if (s.days.includes(weekdayOf(d)) && !existing.has(`${s.id}/${d}`)) added.push(copyOf(s, d, createdAt));
+      if (s.days.includes(weekdayOf(d)) && !existing.has(`${s.id}/${d}`) && !skipped?.includes(d)) {
+        added.push(copyOf(s, d, createdAt));
+      }
     }
     changed = true;
-    return { ...s, filledThrough: to };
+    const { skipped: _skipped, ...rest } = s;
+    return { ...rest, filledThrough: from > to ? s.filledThrough : to, ...(skipped?.length ? { skipped } : {}) };
   });
 
   const logged = loggedMinutesByTask(data.logs);

@@ -153,6 +153,7 @@ export function parseAppData(json: string): AppData {
           isISODate(s.startDate) &&
           (s.until === undefined || isISODate(s.until)) &&
           (s.filledThrough === undefined || isISODate(s.filledThrough)) &&
+          (s.skipped === undefined || (Array.isArray(s.skipped) && s.skipped.every(isISODate))) &&
           typeof s.createdAt === 'string',
       )
     : [];

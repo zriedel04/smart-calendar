@@ -86,7 +86,12 @@ export function reducer(state: AppData, action: Action): AppData {
       // Skipping a day of a repeating task removes it, unless you logged time on it: then it's kept
       // as finished so that time isn't lost.
       if (!state.logs.some((l) => l.taskId === action.id)) {
-        return { ...state, tasks: state.tasks.filter((t) => t.id !== action.id) };
+        const task = state.tasks.find((t) => t.id === action.id);
+        // Remember the day, so remaking the series' copies after an edit doesn't bring it back.
+        const series = (state.series ?? []).map((s) =>
+          task && s.id === task.seriesId ? { ...s, skipped: [...(s.skipped ?? []), task.dueDate] } : s,
+        );
+        return { ...state, series, tasks: state.tasks.filter((t) => t.id !== action.id) };
       }
       const completedAt = new Date().toISOString();
       return { ...state, tasks: state.tasks.map((t) => (t.id === action.id ? { ...t, completedAt } : t)) };

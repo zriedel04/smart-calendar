@@ -38,6 +38,8 @@ export interface TaskSeries {
   createdAt: string;
   /** Copies have been made up to this date, so a copy you delete doesn't come back. */
   filledThrough?: ISODate;
+  /** Upcoming days you skipped, so remaking copies after an edit doesn't bring them back. */
+  skipped?: ISODate[];
 }
 
 /** Time you spent on a task on a given day. Ticking an item on the Today list creates one. */

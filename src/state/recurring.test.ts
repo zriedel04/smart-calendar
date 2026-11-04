@@ -47,6 +47,15 @@ describe('repeating tasks', () => {
     expect(data.tasks.some((t) => t.id === tuesday!.id)).toBe(false);
   });
 
+  it('keeps a skipped day skipped after the series is edited, and forgets it once it passes', () => {
+    let data = add();
+    const id = data.series![0]!.id;
+    data = reducer(data, { type: 'task/skip', id: data.tasks.find((t) => t.dueDate === MONDAY)!.id });
+    data = reducer(data, { type: 'series/update', id, draft: { ...study, title: 'Study Spanish' }, today: MONDAY });
+    expect(dates(data)).toEqual(['2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']);
+    expect(fillSeries(data, '2026-11-03').series![0]!.skipped).toBeUndefined();
+  });
+
   it('stops at its last day', () => {
     expect(dates(add({ ...study, until: '2026-11-03' }))).toEqual(['2026-11-02', '2026-11-03']);
   });
