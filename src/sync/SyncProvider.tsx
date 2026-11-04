@@ -85,7 +85,12 @@ export function SyncProvider({
         const latest = dataRef.current;
         const changedMeanwhile = latest !== local;
         const next: AppData = changedMeanwhile ? mergeAppData(local, latest, result.data) : result.data;
-        if (!sameData(next, latest)) dispatch({ type: 'data/replace', data: next });
+        if (!sameData(next, latest)) {
+          dispatch({ type: 'data/replace', data: next });
+          // The next pass can start before React shows this calendar, and must pair the new
+          // checkpoint with it, not with the calendar from before the merge.
+          dataRef.current = next;
+        }
         setError(null);
         setStatus('synced');
         setLastSynced(Date.now());

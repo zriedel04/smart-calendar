@@ -143,6 +143,47 @@ describe('Sync across devices', () => {
     expect(screen.getByText('Added on the laptop')).toBeInTheDocument();
   });
 
+  it('keeps changes from another device when you edit while a sync is fetching them', async () => {
+    const user = userEvent.setup();
+    const cloud = memoryStore();
+    const fake = fakeBackend(cloud, ME);
+    // Lets the test hold the next fetch until it has made a change on this device.
+    let gate: Promise<void> | null = null;
+    let open = () => {};
+    const backend: SyncBackend = {
+      ...fake.backend,
+      store: () => ({
+        ...cloud.store,
+        fetch: async () => {
+          const wait = gate;
+          gate = null;
+          if (wait) await wait;
+          return cloud.store.fetch();
+        },
+      }),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(createSampleData('2026-11-02')));
+    renderWithSync(backend);
+    await waitFor(() => expect(cloud.row?.version).toBe(1));
+
+    const fromLaptop = structuredClone(cloud.row!.data);
+    fromLaptop.tasks.push({ ...fromLaptop.tasks[0]!, id: 'from-laptop', title: 'Added on the laptop' });
+    cloud.saveFromElsewhere(fromLaptop);
+    gate = new Promise((resolve) => (open = resolve));
+    fake.notifyRemote();
+
+    // Add a task while that sync waits for the account.
+    await user.click(screen.getByRole('button', { name: 'Add task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '2');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    act(() => open());
+
+    await waitFor(() => expect(taskTitles(cloud.row?.data)).toContain('Essay'));
+    expect(taskTitles(cloud.row?.data)).toContain('Added on the laptop');
+  });
+
   it("asks which calendar to keep when this device and the account both have one", async () => {
     const user = userEvent.setup();
     const account = { ...createEmptyData(), tasks: [{ id: 't1', title: 'From my account', dueDate: '2026-11-06', estimateMinutes: 60, createdAt: '2026-11-01T00:00:00.000Z' }] };
