@@ -20,6 +20,10 @@ export interface Task {
   planDate?: ISODate;
   /** The repeating task this is one day's copy of. */
   seriesId?: string;
+  /** The calendar link this came from, so later refreshes keep it up to date. */
+  feedId?: string;
+  /** What the calendar link said about it when last applied, so your own edits survive a refresh. */
+  sourceStamp?: string;
 }
 
 /**
@@ -63,6 +67,22 @@ export interface AppData {
   series?: TaskSeries[];
   /** A timer running on a task. Stopping it logs the time. */
   timer?: RunningTimer;
+  /** Calendar links (Canvas, Google, Outlook) kept up to date automatically. */
+  feeds?: CalendarFeed[];
+}
+
+/** A calendar link the app refreshes by itself, adding, updating and removing what it brought in. */
+export interface CalendarFeed {
+  id: string;
+  /** An https link to an .ics calendar. */
+  url: string;
+  name: string;
+  /** The estimate each new assignment from this link starts with. */
+  estimateMinutes: Minutes;
+  /** ISO timestamp. */
+  addedAt: string;
+  /** Items from this link you deleted, so refreshing doesn't bring them back. */
+  dismissed?: string[];
 }
 
 export interface RunningTimer {

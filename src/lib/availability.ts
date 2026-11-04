@@ -34,6 +34,10 @@ export interface CalendarEvent {
   blocksWork?: boolean;
   /** The calendar entry this was imported from, so importing the same file twice doesn't add it twice. */
   sourceId?: string;
+  /** The calendar link this came from, so later refreshes keep it up to date. */
+  feedId?: string;
+  /** What the calendar link said about it when last applied, so your own edits survive a refresh. */
+  sourceStamp?: string;
 }
 
 export function eventKind(event: CalendarEvent): EventKind {

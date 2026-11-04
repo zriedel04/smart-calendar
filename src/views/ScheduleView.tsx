@@ -4,6 +4,7 @@ import { eventBlocksWork, type CalendarEvent } from '../lib/availability';
 import { formatDate, WEEKDAY_NAMES, WEEKDAYS_MONDAY_FIRST, weekdayOf, type ISODate } from '../lib/dates';
 import { formatDuration, formatRange, normalizeRanges, totalMinutes } from '../lib/time';
 import { AccountCard } from '../components/AccountCard';
+import { CalendarLinksCard } from '../components/CalendarLinksCard';
 import { HoursEditor } from '../components/HoursEditor';
 import { eventRepeatLabel, eventTime } from '../components/eventStyles';
 import { Button, Card, CardHeader, EventIcon } from '../components/ui';
@@ -184,6 +185,7 @@ export function ScheduleView({
       </Card>
 
       <AccountCard />
+      <CalendarLinksCard />
 
       <Card>
         <CardHeader

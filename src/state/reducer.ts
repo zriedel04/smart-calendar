@@ -3,7 +3,9 @@ import { addDays, type ISODate, type Weekday } from '../lib/dates';
 import type { TimeRange } from '../lib/time';
 import { createId } from './ids';
 import { fillSeries, startedTaskIds } from './recurring';
-import type { AppData, Task, TaskSeries } from './types';
+import type { IcsEntry } from '../lib/ics';
+import { applyFeed, dismissFromFeed } from './feeds';
+import type { AppData, CalendarFeed, Task, TaskSeries } from './types';
 
 export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes' | 'sourceId' | 'planDate'>;
 export type EventDraft = Omit<CalendarEvent, 'id'>;
@@ -35,6 +37,9 @@ export type Action =
   | { type: 'series/update'; id: string; draft: SeriesDraft; today: ISODate }
   | { type: 'series/stop'; id: string; today: ISODate }
   | { type: 'series/fill'; today: ISODate }
+  | { type: 'feed/add'; feed: CalendarFeed }
+  | { type: 'feed/remove'; id: string }
+  | { type: 'feed/apply'; id: string; entries: IcsEntry[]; today: ISODate; at: string }
   | { type: 'data/replace'; data: AppData };
 
 /** Whole minutes a timer has run by `at`. */
@@ -108,12 +113,15 @@ function apply(state: AppData, action: Action): AppData {
           return { ...rest, ...action.draft };
         }),
       };
-    case 'task/delete':
+    case 'task/delete': {
+      const deleted = state.tasks.find((t) => t.id === action.id);
       return {
         ...withoutTimerOn(state, action.id),
+        ...(deleted?.feedId ? { feeds: dismissFromFeed(state, deleted) } : {}),
         tasks: state.tasks.filter((t) => t.id !== action.id),
         logs: state.logs.filter((l) => l.taskId !== action.id),
       };
+    }
     case 'task/setComplete':
       return {
         ...(action.complete ? withoutTimerOn(state, action.id) : state),
@@ -222,11 +230,24 @@ function apply(state: AppData, action: Action): AppData {
       return {
         ...state,
         events: state.events.map((e) =>
-          e.id === action.id ? { ...action.draft, id: e.id, sourceId: action.draft.sourceId ?? e.sourceId } : e,
+          e.id === action.id
+            ? {
+                ...action.draft,
+                id: e.id,
+                sourceId: action.draft.sourceId ?? e.sourceId,
+                ...(e.feedId ? { feedId: e.feedId, sourceStamp: e.sourceStamp } : {}),
+              }
+            : e,
         ),
       };
-    case 'event/delete':
-      return { ...state, events: state.events.filter((e) => e.id !== action.id) };
+    case 'event/delete': {
+      const deleted = state.events.find((e) => e.id === action.id);
+      return {
+        ...state,
+        ...(deleted?.feedId ? { feeds: dismissFromFeed(state, deleted) } : {}),
+        events: state.events.filter((e) => e.id !== action.id),
+      };
+    }
     case 'import/add': {
       const createdAt = new Date().toISOString();
       return {
@@ -269,6 +290,21 @@ function apply(state: AppData, action: Action): AppData {
       };
     case 'series/fill':
       return fillSeries(state, action.today);
+    case 'feed/add':
+      return { ...state, feeds: [...(state.feeds ?? []), action.feed] };
+    case 'feed/remove': {
+      // What the link added stays, as if imported from a file, but is no longer kept up to date.
+      const detach = <T extends { feedId?: string; sourceStamp?: string }>(item: T): T => {
+        if (item.feedId !== action.id) return item;
+        const { feedId: _feed, sourceStamp: _stamp, ...rest } = item;
+        return rest as T;
+      };
+      const feeds = (state.feeds ?? []).filter((f) => f.id !== action.id);
+      const { feeds: _feeds, ...rest } = state;
+      return { ...rest, ...(feeds.length ? { feeds } : {}), tasks: state.tasks.map(detach), events: state.events.map(detach) };
+    }
+    case 'feed/apply':
+      return applyFeed(state, action.id, action.entries, action.today, action.at);
     case 'data/replace':
       return action.data;
   }

@@ -45,6 +45,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Log part of an item, or push it to tomorrow.** Did 1 hour of a 2-hour block? Log just that, and the rest stays on the list. Not getting to something today? Push it to tomorrow and today's time goes to the next task.
 - **Repeating tasks.** "Study Spanish, 1 hour every weekday" or "Laundry every Sunday": each day gets its own item, planned on that day, even a day off. Missed days are skipped instead of piling up.
 - **Unfinished work rolls over.** Anything you don't get to is rescheduled from the next day automatically.
+- **Calendar links that stay up to date.** Signed in, paste your Canvas, Google Calendar or Outlook link once. New assignments come in as tasks with your usual estimate, changed due dates and times update, and cancelled events disappear. Your own edits and deletions stick.
 - **Sync across devices, if you want it.** Sign in with an emailed link and your phone and laptop share one calendar. Changes made offline on two devices are merged item by item, so nothing is lost. No account needed to use the app.
 - **Works offline and installs like an app.** It's a PWA, so you can add it to your phone's home screen. Without an account, data stays in your browser, with JSON export and import for backups.
 - **Light and dark mode**, following your system setting.
@@ -70,6 +71,8 @@ Signed in, the whole calendar is one row in a Supabase Postgres table ([`supabas
 - **Merging is three-way** ([`src/sync/merge.ts`](src/sync/merge.ts)). Each device remembers the version it last agreed on with the account. Comparing both sides with it tells a deletion apart from an addition, so a task deleted on the phone stays deleted, and tasks added on each device are both kept. If the same task was edited on both, this device's edit wins.
 - **Changes reach other open devices right away** through Supabase Realtime, and the app also catches up when you come back to it or reconnect.
 - **The first time a device that already has data signs in** to an account that has a different calendar, it asks which one to keep. Nothing is replaced or synced until you choose.
+
+Calendar links are fetched by a small Supabase Edge Function ([`supabase/functions/fetch-feed`](supabase/functions/fetch-feed/index.ts)), because calendar servers like Canvas don't let other sites read their feeds from the browser. It only works for signed-in users and only fetches public https links. Each device refreshes links when the app opens and every few hours, and [`applyFeed`](src/state/feeds.ts) brings the calendar up to date. Items from a link have the same id on every device, so two devices refreshing at once don't add anything twice.
 
 The sync logic ([`src/sync/engine.ts`](src/sync/engine.ts)) talks to a small storage interface, so the tests run it against an in-memory store, including two devices saving at the same moment.
 
@@ -128,11 +131,11 @@ To use your own Supabase project for accounts:
 
 1. Create a project, then run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor.
 2. Under **Authentication → URL Configuration**, set the Site URL to your deployed app and add it (and `http://localhost:5173/**`) to the Redirect URLs.
-3. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set to your project's URL and publishable key.
+3. For calendar links, deploy [`supabase/functions/fetch-feed/index.ts`](supabase/functions/fetch-feed/index.ts) as an Edge Function named `fetch-feed`, with JWT verification turned off (the function checks the signed-in user itself).
+4. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set to your project's URL and publishable key.
 
 ## Roadmap
 
-- Live sync with a Canvas or Google Calendar feed link
 - Importing assignments from a screenshot
 
 ## License

@@ -187,6 +187,18 @@ function fitCopiesToSeries(base: AppData, data: AppData) {
   data.tasks = tasks;
 }
 
+/** Calendar links, merged like other items. Items you deleted from a link stay deleted whichever device you deleted them on. */
+function mergeFeeds(base: AppData, local: AppData, remote: AppData) {
+  const dismissedOn = (d: AppData) => new Map((d.feeds ?? []).map((f) => [f.id, f.dismissed ?? []]));
+  const l = dismissedOn(local);
+  const r = dismissedOn(remote);
+  const withoutDismissed = (d: AppData) => (d.feeds ?? []).map(({ dismissed: _d, ...f }) => f);
+  return mergeById(withoutDismissed(base), withoutDismissed(local), withoutDismissed(remote)).map((f) => {
+    const dismissed = [...new Set([...(l.get(f.id) ?? []), ...(r.get(f.id) ?? [])])];
+    return dismissed.length ? { ...f, dismissed } : f;
+  });
+}
+
 /**
  * Combines this device's calendar with the one saved in the account.
  *
@@ -207,6 +219,8 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   };
   const timer = pick(base.timer, local.timer, remote.timer);
   if (timer) merged.timer = timer;
+  const feeds = mergeFeeds(base, local, remote);
+  if (feeds.length) merged.feeds = feeds;
 
   mergeSkips(base, local, remote, merged);
   keepStartedCopies(base, local, remote, merged);
