@@ -59,18 +59,29 @@ function unescapeText(value: string): string {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+// Creating a formatter is slow, and a long repeating series needs thousands of offset lookups.
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+function zoneFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = zoneFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    });
+    zoneFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 /** The offset of `timeZone` from UTC, in minutes, at the given instant. */
 function zoneOffsetMinutes(timeZone: string, utcMillis: number): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-  }).formatToParts(new Date(utcMillis));
+  const parts = zoneFormatter(timeZone).formatToParts(new Date(utcMillis));
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
   const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
   return Math.round((asUtc - utcMillis) / 60000);

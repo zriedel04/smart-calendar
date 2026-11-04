@@ -203,6 +203,12 @@ describe('App', () => {
     dialog = screen.getByRole('dialog', { name: 'Import a calendar' });
     await user.upload(within(dialog).getByLabelText('Calendar file'), file());
     expect(await within(dialog).findByText(/already in your calendar or already over/)).toBeInTheDocument();
+
+    // Picking a file with nothing in it clears the preview and says why.
+    await user.click(within(dialog).getByRole('button', { name: /Choose a different file/ }));
+    await user.upload(within(dialog).getByLabelText('Calendar file'), new File(['not a calendar'], 'x.ics'));
+    expect(await within(dialog).findByText(/doesn't have any calendar entries/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /^Import|Nothing to import/ })).not.toBeInTheDocument();
   });
 
   it('keeps the last date of a yearly event when it is edited', async () => {

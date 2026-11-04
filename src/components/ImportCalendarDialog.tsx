@@ -45,6 +45,8 @@ export function ImportCalendarDialog({ today, onClose }: { today: ISODate; onClo
     if (!file) return;
     const entries = parseIcs(await file.text());
     if (entries.length === 0) {
+      // Drop any earlier preview so the error shows and the old file can't be imported by mistake.
+      setRows(null);
       setFileError("That file doesn't have any calendar entries. Make sure it's an .ics file.");
       return;
     }
