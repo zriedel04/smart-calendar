@@ -64,6 +64,32 @@ describe('calendar links', () => {
     }
   });
 
+  it('keeps each run deleted or kept when the link drops a different run', () => {
+    const mon = lecture('mwf', '2026-11-02');
+    const wed = lecture('mwf', '2026-11-04');
+    const fri = lecture('mwf', '2026-11-06');
+    let data = apply(withFeed(), [mon, wed, fri]);
+    data = reducer(data, { type: 'event/delete', id: data.events.find((e) => e.date === '2026-11-04')!.id });
+    data = apply(data, [wed, fri]);
+    expect(data.events.map((e) => e.date)).toEqual(['2026-11-06']);
+  });
+
+  it("doesn't duplicate a file-imported event when one device adds the link and the other edits the event", () => {
+    const party: IcsEntry = { ...lecture('p1', '2026-11-06'), title: 'Party', repeat: 'none', until: undefined };
+    const imported = reducer(createEmptyData(), {
+      type: 'import/add',
+      tasks: [],
+      events: [{ title: 'Party', date: '2026-11-06', start: 600, end: 675, repeat: 'none', allDay: false, blocksWork: true, kind: 'busy', sourceId: 'p1' }],
+    });
+    const laptop = apply(withFeed(imported), [party]);
+    const { id, ...draft } = imported.events[0]!;
+    const phone = reducer(imported, { type: 'event/update', id, draft: { ...draft, title: 'Party at Sam\'s' } });
+    for (const merged of [mergeAppData(imported, laptop, phone), mergeAppData(imported, phone, laptop)]) {
+      expect(merged.events).toHaveLength(1);
+      expect(apply(merged, [party]).events).toHaveLength(1);
+    }
+  });
+
   it('removes upcoming items the link dropped, unless you started or finished them', () => {
     let data = apply(withFeed(), [
       assignment('a1', 'Quiz 1', '2026-11-05'),

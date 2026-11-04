@@ -11,15 +11,16 @@ export const FEED_REFRESH_MS = 3 * 60 * 60 * 1000;
  * Items from a link get the same id on every device, so two devices refreshing the same link at
  * once add each item only once when their calendars are merged.
  */
-export const feedItemId = (feedId: string, uid: string, part?: number) =>
+export const feedItemId = (feedId: string, uid: string, part?: string) =>
   `feed:${feedId}:${uid}${part === undefined ? '' : `:${part}`}`;
 
 /**
  * What a deleted item from a link is remembered by, so refreshing doesn't bring it back: a task by
- * its calendar entry, an event by its id, which stays the same however you edit it.
+ * its calendar entry, an event by which run and day of its entry it is (`sourceKey`), which stays
+ * the same however you edit it and whatever happens to the entry's other runs.
  */
-export function dismissKey(item: Pick<Task, 'sourceId'> | Pick<CalendarEvent, 'id' | 'date'>): string {
-  return 'date' in item ? `event:${item.id}` : `task:${item.sourceId}`;
+export function dismissKey(item: Pick<Task, 'sourceId'> | Pick<CalendarEvent, 'id' | 'date' | 'sourceKey'>): string {
+  return 'date' in item ? `event:${item.sourceKey ?? item.id}` : `task:${item.sourceId}`;
 }
 
 /** A readable name for a link, such as "Canvas" for a Canvas calendar feed. */
@@ -108,19 +109,30 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
       continue;
     }
 
-    const drafts = runs.flatMap((run) => toEventDrafts(run));
+    // Each event is known by its run's first date and its day within the run, not by its position,
+    // so a run added or dropped at the source doesn't shift the others.
+    const keyed = runs.flatMap((run) => toEventDrafts(run).map((d, day) => ({ d, key: `${uid}:${run.date}+${day}` })));
+    const drafts = keyed.map((k) => k.d);
     const stamp = JSON.stringify(drafts);
     const group = events.filter((e) => e.sourceId === uid && ours(e));
     const fresh = () =>
-      drafts
-        .map((d, part): CalendarEvent => ({ ...d, id: feedItemId(feed.id, uid, part), feedId: feed.id, sourceStamp: stamp }))
+      keyed
+        .map(({ d, key }): CalendarEvent => ({
+          ...d,
+          id: feedItemId(feed.id, uid, key.slice(uid.length + 1)),
+          feedId: feed.id,
+          sourceStamp: stamp,
+          sourceKey: key,
+        }))
         .filter((e) => !dismissed.has(dismissKey(e)));
     if (group.length > 0) {
       if (group.some((e) => !e.feedId)) {
-        // Events imported from a file get the link's ids, keeping any edits, so deleting one later is remembered.
+        // Events imported from a file keep their ids and edits, and learn which run and day they are,
+        // so deleting one later is remembered.
         const ordered = [...group].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
-        const ids = new Map(ordered.map((e, part) => [e, feedItemId(feed.id, uid, part)]));
-        events = events.map((e) => (ids.has(e) ? { ...e, id: ids.get(e)!, feedId: feed.id, sourceStamp: stamp } : e));
+        const keys = [...keyed].sort((a, b) => a.d.date.localeCompare(b.d.date) || a.d.start - b.d.start).map((k) => k.key);
+        const keyOf = new Map(ordered.map((e, i) => [e, keys[i] ?? `${uid}:${e.date}+0`]));
+        events = events.map((e) => (keyOf.has(e) ? { ...e, feedId: feed.id, sourceStamp: stamp, sourceKey: keyOf.get(e)! } : e));
         changed = true;
       } else if (group.some((e) => e.sourceStamp !== stamp)) {
         events = [...events.filter((e) => !group.includes(e)), ...fresh()];

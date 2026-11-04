@@ -235,7 +235,7 @@ function apply(state: AppData, action: Action): AppData {
                 ...action.draft,
                 id: e.id,
                 sourceId: action.draft.sourceId ?? e.sourceId,
-                ...(e.feedId ? { feedId: e.feedId, sourceStamp: e.sourceStamp } : {}),
+                ...(e.feedId ? { feedId: e.feedId, sourceStamp: e.sourceStamp, sourceKey: e.sourceKey } : {}),
               }
             : e,
         ),
@@ -296,7 +296,7 @@ function apply(state: AppData, action: Action): AppData {
       // What the link added stays, as if imported from a file, but is no longer kept up to date.
       const detach = <T extends { feedId?: string; sourceStamp?: string }>(item: T): T => {
         if (item.feedId !== action.id) return item;
-        const { feedId: _feed, sourceStamp: _stamp, ...rest } = item;
+        const { feedId: _feed, sourceStamp: _stamp, sourceKey: _key, ...rest } = item as T & { sourceKey?: string };
         return rest as T;
       };
       const feeds = (state.feeds ?? []).filter((f) => f.id !== action.id);

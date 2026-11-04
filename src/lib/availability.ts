@@ -38,6 +38,8 @@ export interface CalendarEvent {
   feedId?: string;
   /** What the calendar link said about it when last applied, so your own edits survive a refresh. */
   sourceStamp?: string;
+  /** Which run and day of its calendar entry this is, so deleting it is remembered however it's edited. */
+  sourceKey?: string;
 }
 
 export function eventKind(event: CalendarEvent): EventKind {
