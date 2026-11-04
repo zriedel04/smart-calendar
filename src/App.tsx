@@ -5,6 +5,7 @@ import { DayHoursDialog } from './components/DayHoursDialog';
 import { EventForm } from './components/EventForm';
 import { ImportCalendarDialog } from './components/ImportCalendarDialog';
 import { TaskForm } from './components/TaskForm';
+import { UndoToast } from './components/UndoToast';
 import { cx } from './components/cx';
 import { Button } from './components/ui';
 import type { CalendarEvent } from './lib/availability';
@@ -133,6 +134,7 @@ export default function App() {
             onEditTask={editTask}
             onEditDay={editDay}
             onLoadSample={loadSample}
+            onOpenSchedule={() => go('schedule')}
           />
         )}
         {tab === 'week' && <WeekView plan={plan} onEditDay={editDay} onEditTask={editTask} />}
@@ -161,6 +163,7 @@ export default function App() {
         <EventForm event={dialog.event} defaultDate={dialog.date} today={today} onClose={close} />
       )}
       {dialog?.kind === 'import' && <ImportCalendarDialog today={today} onClose={close} />}
+      <UndoToast />
     </div>
   );
 }
