@@ -164,7 +164,7 @@ function keepStartedCopies(local: AppData, remote: AppData, data: AppData) {
 /**
  * One device made new days for a repeating task while the other changed it, say renamed it or moved
  * it to Tuesdays only. A new day that's no longer on the task's schedule is dropped; one that still
- * is gets the task's current details. Days you started or finished are left alone.
+ * is gets the task's current details. Skipped days go. Days you started or finished are left alone.
  */
 function fitCopiesToSeries(base: AppData, data: AppData) {
   const seriesById = new Map((data.series ?? []).map((s) => [s.id, s]));
@@ -175,7 +175,10 @@ function fitCopiesToSeries(base: AppData, data: AppData) {
   const tasks: Task[] = [];
   for (const t of data.tasks) {
     const s = t.seriesId ? seriesById.get(t.seriesId) : undefined;
-    if (!s || inBase.has(t.id) || t.completedAt || started.has(t.id)) tasks.push(t);
+    if (!s || t.completedAt || started.has(t.id)) tasks.push(t);
+    // A day skipped on either device goes, even if both had it before.
+    else if (s.skipped?.includes(t.dueDate)) continue;
+    else if (inBase.has(t.id)) tasks.push(t);
     else if (onSchedule(t.dueDate, s)) tasks.push({ ...copyOf(s, t.dueDate, t.createdAt), id: t.id });
   }
   data.tasks = tasks;

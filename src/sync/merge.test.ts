@@ -126,6 +126,20 @@ describe('mergeAppData', () => {
     }
   });
 
+  it('drops a day skipped on one device while the other renamed the task', () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const id = base.series![0]!.id;
+    const friday = base.tasks.find((t) => t.dueDate === '2026-11-06')!;
+    const phone = reducer(base, { type: 'task/skip', id: friday.id });
+    const laptop = reducer(base, { type: 'series/update', id, draft: { ...draft, title: 'Spanish' }, today: '2026-11-03' });
+    for (const merged of [mergeAppData(base, laptop, phone), mergeAppData(base, phone, laptop)]) {
+      const filled = reducer(merged, { type: 'series/fill', today: '2026-11-03' });
+      expect(filled.tasks.some((t) => t.dueDate === '2026-11-06')).toBe(false);
+      expect(filled.series![0]!.title).toBe('Spanish');
+    }
+  });
+
   it('keeps a skip taken back with Undo while the skip was syncing', () => {
     const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
     const before = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
