@@ -46,6 +46,24 @@ describe('calendar links', () => {
     expect(data.events[0]).toMatchObject({ start: 660 });
   });
 
+  it('keeps every run of a repeating entry that comes back as several runs with one UID', () => {
+    const runs = [lecture('mwf', '2026-11-02'), lecture('mwf', '2026-11-04'), lecture('mwf', '2026-11-06')];
+    const once = apply(withFeed(), runs);
+    expect(once.events.map((e) => e.date)).toEqual(['2026-11-02', '2026-11-04', '2026-11-06']);
+    expect(new Set(once.events.map((e) => e.id)).size).toBe(3);
+    expect(apply(once, runs)).toBe(once);
+  });
+
+  it('keeps an item deleted on one device deleted when the other refreshed a change to it', () => {
+    const base = apply(withFeed(), [assignment('a1', 'Quiz 1', '2026-11-05')]);
+    const phone = reducer(base, { type: 'task/delete', id: feedItemId('f1', 'a1') });
+    const laptop = apply(base, [assignment('a1', 'Quiz 1', '2026-11-12')]);
+    for (const merged of [mergeAppData(base, laptop, phone), mergeAppData(base, phone, laptop)]) {
+      expect(merged.tasks).toEqual([]);
+      expect(apply(merged, [assignment('a1', 'Quiz 1', '2026-11-12')]).tasks).toEqual([]);
+    }
+  });
+
   it('removes upcoming items the link dropped, unless you started or finished them', () => {
     let data = apply(withFeed(), [
       assignment('a1', 'Quiz 1', '2026-11-05'),

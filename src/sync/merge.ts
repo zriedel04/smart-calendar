@@ -1,5 +1,7 @@
 import { weekdayOf } from '../lib/dates';
 import { copyOf } from '../state/recurring';
+import type { CalendarEvent } from '../lib/availability';
+import { dismissKey } from '../state/feeds';
 import type { AppData, Task, TaskSeries } from '../state/types';
 
 /** True if two JSON-like values hold the same data, whatever order their keys are in. */
@@ -220,7 +222,14 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   const timer = pick(base.timer, local.timer, remote.timer);
   if (timer) merged.timer = timer;
   const feeds = mergeFeeds(base, local, remote);
-  if (feeds.length) merged.feeds = feeds;
+  if (feeds.length) {
+    merged.feeds = feeds;
+    // An item from a link deleted on one device stays deleted, even if the other refreshed it meanwhile.
+    const dismissed = new Map(feeds.map((f) => [f.id, new Set('dismissed' in f ? f.dismissed : [])]));
+    const gone = (item: Task | CalendarEvent) => !!item.feedId && !!dismissed.get(item.feedId)?.has(dismissKey(item));
+    merged.tasks = merged.tasks.filter((t) => !gone(t));
+    merged.events = merged.events.filter((e) => !gone(e));
+  }
 
   mergeSkips(base, local, remote, merged);
   keepStartedCopies(base, local, remote, merged);

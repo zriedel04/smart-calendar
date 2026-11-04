@@ -29,6 +29,35 @@ function allowed(url: URL): boolean {
   return !/(^|\.)(localhost|local|internal|localdomain|home|lan|intranet|corp)$/.test(host);
 }
 
+/** True for addresses that aren't on the public internet: private, loopback, link-local and the like. */
+function privateAddress(ip: string): boolean {
+  const v4 = ip.match(/^(?:::ffff:)?(\d+)\.(\d+)\.(\d+)\.(\d+)$/i);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return (
+      a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0) ||
+      (a === 198 && (b === 18 || b === 19))
+    );
+  }
+  const v6 = ip.toLowerCase();
+  return v6 === '::' || v6 === '::1' || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || /^ff/.test(v6) || v6.startsWith('64:ff9b:');
+}
+
+/**
+ * Looks the host up and refuses it if any address it points to isn't public, so a name that leads
+ * to an internal service can't be fetched. Checked again on every redirect.
+ */
+async function resolvesPublicly(host: string): Promise<boolean> {
+  const lookups = await Promise.allSettled([Deno.resolveDns(host, 'A'), Deno.resolveDns(host, 'AAAA')]);
+  const addresses = lookups.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  return addresses.length > 0 && !addresses.some(privateAddress);
+}
+
 async function signedIn(req: Request): Promise<boolean> {
   const auth = req.headers.get('Authorization') ?? '';
   const apikey = Deno.env.get('SUPABASE_ANON_KEY') ?? req.headers.get('apikey') ?? '';
@@ -77,7 +106,9 @@ Deno.serve(async (req) => {
 
   const signal = AbortSignal.timeout(TIMEOUT_MS);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    if (!allowed(target)) return reply(400, 'Only public https calendar links can be added.');
+    if (!allowed(target) || !(await resolvesPublicly(target.hostname))) {
+      return reply(400, 'Only public https calendar links can be added.');
+    }
     let res: Response;
     try {
       res = await fetch(target, { redirect: 'manual', signal, headers: { Accept: 'text/calendar, */*' } });

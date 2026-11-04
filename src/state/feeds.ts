@@ -79,11 +79,17 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
   let events = [...data.events];
   const added: { tasks: Task[]; events: CalendarEvent[] } = { tasks: [], events: [] };
 
-  for (const entry of entries) {
-    if (entry.looksLikeAssignment) {
-      const draft = toTaskDraft(entry, feed.estimateMinutes);
+  // A repeating entry can come back as several runs with the same UID (Monday, Wednesday and
+  // Friday, or before and after a clock change), so each UID is handled as one group.
+  const byUid = new Map<string, IcsEntry[]>();
+  for (const entry of entries) byUid.set(entry.uid, [...(byUid.get(entry.uid) ?? []), entry]);
+
+  for (const [uid, runs] of byUid) {
+    const first = runs[0]!;
+    if (first.looksLikeAssignment) {
+      const draft = toTaskDraft(first, feed.estimateMinutes);
       const stamp = JSON.stringify([draft.title, draft.dueDate]);
-      const i = tasks.findIndex((t) => t.sourceId === entry.uid && ours(t));
+      const i = tasks.findIndex((t) => t.sourceId === uid && ours(t));
       if (i >= 0) {
         const task = tasks[i]!;
         if (!task.feedId) {
@@ -93,18 +99,18 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
           tasks[i] = { ...task, title: draft.title, dueDate: draft.dueDate, sourceStamp: stamp };
           changed = true;
         }
-      } else if (!isPast(entry, 'task', today) && !dismissed.has(dismissKey(draft))) {
-        added.tasks.push({ ...draft, id: feedItemId(feed.id, entry.uid), createdAt: now, feedId: feed.id, sourceStamp: stamp });
+      } else if (!isPast(first, 'task', today) && !dismissed.has(dismissKey(draft))) {
+        added.tasks.push({ ...draft, id: feedItemId(feed.id, uid), createdAt: now, feedId: feed.id, sourceStamp: stamp });
       }
       continue;
     }
 
-    const drafts = toEventDrafts(entry);
+    const drafts = runs.flatMap((run) => toEventDrafts(run));
     const stamp = JSON.stringify(drafts);
-    const group = events.filter((e) => e.sourceId === entry.uid && ours(e));
+    const group = events.filter((e) => e.sourceId === uid && ours(e));
     const fresh = () =>
       drafts
-        .map((d, part): CalendarEvent => ({ ...d, id: feedItemId(feed.id, entry.uid, part), feedId: feed.id, sourceStamp: stamp }))
+        .map((d, part): CalendarEvent => ({ ...d, id: feedItemId(feed.id, uid, part), feedId: feed.id, sourceStamp: stamp }))
         .filter((e) => !dismissed.has(dismissKey(e)));
     if (group.length > 0) {
       if (group.some((e) => !e.feedId)) {
@@ -114,7 +120,7 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
         events = [...events.filter((e) => !group.includes(e)), ...fresh()];
         changed = true;
       }
-    } else if (!isPast(entry, 'event', today)) {
+    } else if (!runs.every((run) => isPast(run, 'event', today))) {
       added.events.push(...fresh());
     }
   }
