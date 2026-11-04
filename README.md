@@ -7,10 +7,15 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 **[Live demo →](https://zriedel04.github.io/smart-calendar/)** (click "Try it with sample tasks")
 
 <p align="center">
-  <img src="docs/screenshots/today.png" alt="Today's checklist" width="24%" />
-  <img src="docs/screenshots/week.png" alt="Week plan" width="24%" />
-  <img src="docs/screenshots/tasks.png" alt="Tasks grouped by priority" width="24%" />
-  <img src="docs/screenshots/change-hours.png" alt="Changing hours for one day" width="24%" />
+  <img src="docs/demo.gif" alt="Ticking off work, logging part of a task, and adding a repeating task" width="300" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/setup.png" alt="First-run setup: pick your usual work hours" width="19%" />
+  <img src="docs/screenshots/today.png" alt="Today's checklist" width="19%" />
+  <img src="docs/screenshots/week.png" alt="Week plan" width="19%" />
+  <img src="docs/screenshots/tasks.png" alt="Tasks grouped by priority" width="19%" />
+  <img src="docs/screenshots/change-hours.png" alt="Changing hours for one day" width="19%" />
 </p>
 
 <p align="center">
@@ -32,6 +37,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Priorities at a glance.** Due today is **Urgent**, due within a week is **Needed**, anything later is **To do**, and missed due dates are **Overdue**.
 - **Events, plans and birthdays.** Add classes, shifts, plans with friends and birthdays, timed or all day, one-time, weekly (with an end date, like the end of the semester), monthly or yearly. Choose whether each one takes time away from work.
 - **Import from Canvas or any calendar.** Load an .ics file from Canvas, Google Calendar, Apple Calendar or Outlook. Assignments come in as tasks (you just add the hours), everything else as events, and you see a preview first. Importing the same file again won't add duplicates.
+- **Quick to set up, easy to fix mistakes.** Pick your usual hours with one tap on first launch. Ticked something off by accident, or deleted the wrong task? Hit Undo.
 - **Early warnings.** If a task can't be finished before it's due with your current hours, it's flagged as at risk.
 - **Log part of an item, or push it to tomorrow.** Did 1 hour of a 2-hour block? Log just that, and the rest stays on the list. Not getting to something today? Push it to tomorrow and today's time goes to the next task.
 - **Repeating tasks.** "Study Spanish, 1 hour every weekday" or "Laundry every Sunday": each day gets its own item, planned on that day, even a day off. Missed days are skipped instead of piling up.

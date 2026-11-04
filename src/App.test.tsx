@@ -145,6 +145,27 @@ describe('App', () => {
     expect(screen.queryByText(/Every Saturday/)).not.toBeInTheDocument();
   });
 
+  it('sets usual hours from a first-run choice, and undoes a tick', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const evenings = screen.getByRole('radio', { name: 'Every evening, 6pm to 10pm' });
+    await user.click(evenings);
+    expect(evenings).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(/6pm – 10pm/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '2');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+
+    await user.click(screen.getByRole('checkbox', { name: 'Mark "Essay" done' }));
+    expect(screen.getByText('Logged 2h on "Essay"')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByRole('checkbox', { name: 'Mark "Essay" done' })).toBeInTheDocument();
+    expect(screen.queryByText('Logged 2h on "Essay"')).not.toBeInTheDocument();
+  });
+
   it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
     const user = userEvent.setup();
     const { container } = renderApp();
@@ -166,7 +187,7 @@ describe('App', () => {
   it('picks up changes saved in another tab instead of overwriting them', async () => {
     const user = userEvent.setup();
     renderApp();
-    expect(screen.getByText('No tasks yet')).toBeInTheDocument();
+    expect(screen.getByText("Let's set up your calendar")).toBeInTheDocument();
 
     // Another tab saves sample data.
     const newValue = JSON.stringify(createSampleData('2026-11-02'));

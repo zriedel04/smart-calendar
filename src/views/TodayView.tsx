@@ -3,7 +3,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventsOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { addDays, formatDate, relativeDayPhrase } from '../lib/dates';
 import { priorityOf } from '../lib/priority';
-import { formatDuration, formatRange } from '../lib/time';
+import { formatDuration, formatRange, type TimeRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { inputClass } from '../components/styles';
 import { eventTime } from '../components/eventStyles';
@@ -18,12 +18,14 @@ export function TodayView({
   onEditTask,
   onEditDay,
   onLoadSample,
+  onOpenSchedule,
 }: {
   plan: Plan;
   onAddTask: () => void;
   onEditTask: (task: Task) => void;
   onEditDay: (date: string) => void;
   onLoadSample: () => void;
+  onOpenSchedule: () => void;
 }) {
   const { data, dispatch } = useStore();
   const { today } = plan;
@@ -148,9 +150,12 @@ export function TodayView({
         </div>
 
         {data.tasks.length === 0 ? (
-          <EmptyState icon={<Sparkles className="size-6" />} title="No tasks yet">
-            <p>Add what you need to get done and how long it'll take. I'll fill your work hours with it.</p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <EmptyState icon={<Sparkles className="size-6" />} title="Let's set up your calendar">
+            <p className="font-medium text-slate-700 dark:text-slate-200">1. When do you usually work?</p>
+            <HourPresets onOpenSchedule={onOpenSchedule} />
+            <p className="mt-5 font-medium text-slate-700 dark:text-slate-200">2. Add what you need to get done</p>
+            <p>Give each task a due date and how long it'll take. Your work hours fill up with it automatically.</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
               <Button variant="primary" onClick={onAddTask}>
                 <Plus className="size-4" /> Add your first task
               </Button>
@@ -398,6 +403,53 @@ function RowActions({
           </>
         )}
       </Button>
+    </div>
+  );
+}
+
+const block = (start: number, end: number) => [{ start: start * 60, end: end * 60 }];
+const HOUR_PRESETS: { label: string; week: TimeRange[][] }[] = [
+  { label: 'Weekdays, 12pm to 6pm', week: [[], ...Array.from({ length: 5 }, () => block(12, 18)), []] },
+  { label: 'Weekdays, 9am to 5pm', week: [[], ...Array.from({ length: 5 }, () => block(9, 17)), []] },
+  { label: 'Every evening, 6pm to 10pm', week: Array.from({ length: 7 }, () => block(18, 22)) },
+  { label: 'Every day, 10am to 4pm', week: Array.from({ length: 7 }, () => block(10, 16)) },
+];
+
+/** Quick choices for your usual weekly hours, for someone just starting out. */
+function HourPresets({ onOpenSchedule }: { onOpenSchedule: () => void }) {
+  const { data, dispatch } = useStore();
+  const current = JSON.stringify(data.weeklyHours);
+  return (
+    <div className="mt-2">
+      <div role="radiogroup" aria-label="Usual work hours" className="flex flex-wrap justify-center gap-2">
+        {HOUR_PRESETS.map(({ label, week }) => {
+          const selected = JSON.stringify(week) === current;
+          return (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => dispatch({ type: 'hours/setWeek', weeklyHours: week })}
+              className={cx(
+                'rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-inset',
+                selected
+                  ? 'bg-indigo-600 text-white ring-indigo-600'
+                  : 'bg-white text-slate-700 ring-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-800',
+              )}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={onOpenSchedule}
+        className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-300"
+      >
+        Something else? Set your hours day by day
+      </button>
     </div>
   );
 }

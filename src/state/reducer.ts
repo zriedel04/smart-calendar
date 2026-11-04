@@ -20,6 +20,7 @@ export type Action =
   | { type: 'work/log'; taskId: string; date: ISODate; minutes: number }
   | { type: 'work/undoDay'; taskId: string; date: ISODate }
   | { type: 'hours/setWeekday'; weekday: Weekday; ranges: TimeRange[] }
+  | { type: 'hours/setWeek'; weeklyHours: TimeRange[][] }
   | { type: 'hours/setOverride'; date: ISODate; ranges: TimeRange[] }
   | { type: 'hours/clearOverride'; date: ISODate }
   | { type: 'event/add'; draft: EventDraft }
@@ -122,6 +123,8 @@ export function reducer(state: AppData, action: Action): AppData {
         ...state,
         weeklyHours: state.weeklyHours.map((r, i) => (i === action.weekday ? action.ranges : r)),
       };
+    case 'hours/setWeek':
+      return { ...state, weeklyHours: action.weeklyHours };
     case 'hours/setOverride':
       return { ...state, overrides: { ...state.overrides, [action.date]: action.ranges } };
     case 'hours/clearOverride': {
