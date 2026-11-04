@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Plus, Repeat, SkipForward, Sparkles } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { capacityOn, eventsOn, hasOverride, workingHoursOn } from '../lib/availability';
+import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
+import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
 import { addDays, formatDate, relativeDayPhrase } from '../lib/dates';
 import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange, type TimeRange } from '../lib/time';
@@ -9,6 +10,7 @@ import { inputClass } from '../components/styles';
 import { eventTime } from '../components/eventStyles';
 import { Button, Card, EmptyState, PriorityBadge, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
+import { useClockMinutes, useShowTimes } from '../state/preferences';
 import { isTaskComplete, remainingMinutes, type Plan } from '../state/planner';
 import type { Task } from '../state/types';
 
@@ -53,6 +55,12 @@ export function TodayView({
   // Tasks pushed off today that would otherwise still need work.
   const pushed = openTasks.filter((t) => !t.seriesId && t.notBefore && t.notBefore > today);
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const [showTimes, setShowTimes] = useShowTimes();
+  const clock = useClockMinutes();
+  // Suggested times for what's left today, starting from now.
+  const times = new Map(
+    timeBlocks(freeHoursOn(data, today), pending, nextQuarterHour(clock)).map((t) => [t.taskId, t.ranges]),
+  );
 
   return (
     <div className="space-y-4">
@@ -147,6 +155,17 @@ export function TodayView({
       <Card className="p-2 sm:p-3">
         <div className="flex items-center justify-between px-2 pt-1 pb-2">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Today's list</h2>
+          {pending.length > 0 && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showTimes}
+              onClick={() => setShowTimes(!showTimes)}
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              <Clock className="size-3.5" /> Suggested times {showTimes ? 'on' : 'off'}
+            </button>
+          )}
         </div>
 
         {data.tasks.length === 0 ? (
@@ -186,9 +205,11 @@ export function TodayView({
                   badge={<PriorityBadge priority={priorityOf(task.dueDate, today)} />}
                   meta={
                     <>
+                      {showTimes && <SuggestedTime ranges={times.get(task.id)} />}
                       {task.seriesId && <Repeat className="mr-1 inline size-3.5 align-[-2px]" aria-label="Repeats" />}
                       {formatDuration(item.minutes)}
                       {task.seriesId ? '' : ` · due ${relativeDayPhrase(task.dueDate, today)}`}
+
                       {item.minutes < left && ` · ${formatDuration(left)} left in total`}
                     </>
                   }
@@ -451,5 +472,20 @@ function HourPresets({ onOpenSchedule }: { onOpenSchedule: () => void }) {
         Something else? Set your hours day by day
       </button>
     </div>
+  );
+}
+
+/** When to work on an item, shown first on its line: one span from its start to its end, even across a break. */
+function SuggestedTime({ ranges }: { ranges?: TimeRange[] }) {
+  const first = ranges?.[0];
+  const last = ranges?.at(-1);
+  if (!first || !last) return null;
+  return (
+    <span
+      className="font-medium text-indigo-600 dark:text-indigo-300"
+      title={ranges.length > 1 ? `Split around a break: ${ranges.map(formatRange).join(', ')}` : undefined}
+    >
+      {formatRange({ start: first.start, end: last.end })} ·{' '}
+    </span>
   );
 }

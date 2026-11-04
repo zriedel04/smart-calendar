@@ -1,14 +1,16 @@
 import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { capacityOn, eventsOn, hasOverride, workingHoursOn } from '../lib/availability';
+import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
+import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
 import { priorityOf } from '../lib/priority';
-import { formatDuration, formatRange } from '../lib/time';
+import { formatClock, formatDuration, formatRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { PRIORITY_DOT } from '../components/styles';
 import { eventTime } from '../components/eventStyles';
 import { Button, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
+import { useClockMinutes, useShowTimes } from '../state/preferences';
 import type { Plan } from '../state/planner';
 import type { Task } from '../state/types';
 
@@ -26,6 +28,8 @@ export function WeekView({
   const thisWeek = startOfWeek(today);
   const [weekStart, setWeekStart] = useState(thisWeek);
   const tasksById = useMemo(() => new Map(data.tasks.map((t) => [t.id, t])), [data.tasks]);
+  const [showTimes] = useShowTimes();
+  const clock = useClockMinutes();
   const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const heading =
@@ -77,6 +81,14 @@ export function WeekView({
           }
           const doneMinutes = [...doneByTask.values()].reduce((a, b) => a + b, 0);
           const plannedMinutes = items.reduce((a, i) => a + i.minutes, 0);
+          const starts = new Map(
+            showTimes
+              ? timeBlocks(freeHoursOn(data, date), items, isToday ? nextQuarterHour(clock) : 0).map((t) => [
+                  t.taskId,
+                  t.ranges[0]?.start,
+                ])
+              : [],
+          );
 
           return (
             <li
@@ -182,6 +194,11 @@ export function WeekView({
                               <span
                                 className={cx('size-2 shrink-0 rounded-full', PRIORITY_DOT[priorityOf(task.dueDate, today)])}
                               />
+                              {starts.get(item.taskId) !== undefined && (
+                                <span className="w-14 shrink-0 text-xs text-slate-500 tabular-nums dark:text-slate-400">
+                                  {formatClock(starts.get(item.taskId)!)}
+                                </span>
+                              )}
                               <span className="min-w-0 flex-1 truncate">{task.title}</span>
                               <span className="tabular-nums text-slate-500 dark:text-slate-400">
                                 {formatDuration(item.minutes)}

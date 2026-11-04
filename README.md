@@ -39,6 +39,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Import from Canvas or any calendar.** Load an .ics file from Canvas, Google Calendar, Apple Calendar or Outlook. Assignments come in as tasks (you just add the hours), everything else as events, and you see a preview first. Importing the same file again won't add duplicates.
 - **Quick to set up, easy to fix mistakes.** Pick your usual hours with one tap on first launch. Ticked something off by accident, or deleted the wrong task? Hit Undo.
 - **Early warnings.** If a task can't be finished before it's due with your current hours, it's flagged as at risk.
+- **Suggested times.** Each item on Today's list shows when to work on it, like "1:30pm – 4:30pm", fitted around your classes and plans and starting from now. The Week view shows start times too. Turn them off with one tap.
 - **Log part of an item, or push it to tomorrow.** Did 1 hour of a 2-hour block? Log just that, and the rest stays on the list. Not getting to something today? Push it to tomorrow and today's time goes to the next task.
 - **Repeating tasks.** "Study Spanish, 1 hour every weekday" or "Laundry every Sunday": each day gets its own item, planned on that day, even a day off. Missed days are skipped instead of piling up.
 - **Unfinished work rolls over.** Anything you don't get to is rescheduled from the next day automatically.
@@ -112,7 +113,6 @@ To deploy your own copy, enable GitHub Pages under **Settings → Pages → Buil
 - Accounts and cloud sync so your phone and laptop share the same data
 - Live sync with a Canvas or Google Calendar feed link
 - Importing assignments from a screenshot
-- Optional time-blocking: suggested start times within your work hours
 
 ## License
 
