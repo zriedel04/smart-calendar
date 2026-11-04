@@ -43,8 +43,14 @@ describe('repeating tasks', () => {
     data = fillSeries(data, '2026-11-03');
     expect(data.tasks.some((t) => t.id === monday.id)).toBe(true);
     expect(data.timer?.taskId).toBe(monday.id);
-    data = reducer(data, { type: 'timer/stop', at: '2026-11-03T07:30:00.000Z', date: '2026-11-03' });
-    expect(data.logs).toMatchObject([{ taskId: monday.id, minutes: 60 }]);
+    const kept = data;
+    data = reducer(data, { type: 'timer/stop', at: '2026-11-03T07:00:00.000Z', date: '2026-11-03' });
+    expect(data.logs).toMatchObject([{ taskId: monday.id, minutes: 30 }]);
+    // Once the timer ends, the past day is tidied right away: finished, since some time was logged.
+    expect(data.tasks.find((t) => t.id === monday.id)?.completedAt).toBeDefined();
+    // Cancelling instead leaves nothing logged, so the past day is cleared.
+    const cancelled = reducer(kept, { type: 'timer/cancel', date: '2026-11-03' });
+    expect(cancelled.tasks.some((t) => t.id === monday.id)).toBe(false);
   });
 
   it('keeps a timed day and its timer when the repeating task is edited, stopped or made from a timed task', () => {

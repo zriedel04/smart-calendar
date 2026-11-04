@@ -45,7 +45,7 @@ export function TimerBar() {
         </button>
         <button
           type="button"
-          onClick={() => dispatch({ type: 'timer/cancel' })}
+          onClick={() => dispatch({ type: 'timer/cancel', date: localToday() })}
           aria-label="Cancel timer without logging"
           className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-indigo-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-indigo-500/20 dark:hover:text-white"
         >

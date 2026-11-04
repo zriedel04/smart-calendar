@@ -22,7 +22,7 @@ export type Action =
   | { type: 'work/undoDay'; taskId: string; date: ISODate }
   | { type: 'timer/start'; taskId: string; at: string; date: ISODate }
   | { type: 'timer/stop'; at: string; date: ISODate }
-  | { type: 'timer/cancel' }
+  | { type: 'timer/cancel'; date: ISODate }
   | { type: 'hours/setWeekday'; weekday: Weekday; ranges: TimeRange[] }
   | { type: 'hours/setWeek'; weeklyHours: TimeRange[][] }
   | { type: 'hours/setOverride'; date: ISODate; ranges: TimeRange[] }
@@ -49,6 +49,15 @@ function stopTimer(state: AppData, at: string, date: ISODate): AppData {
   const minutes = timerMinutes(timer.startedAt, at);
   if (minutes < 1 || !state.tasks.some((t) => t.id === timer.taskId)) return rest;
   return { ...rest, logs: [...state.logs, { id: createId(), taskId: timer.taskId, date, minutes }] };
+}
+
+/**
+ * A repeating task's past day is kept while its timer runs past midnight. Once the timer ends,
+ * tidy it the usual way: finished if time was logged on it, otherwise removed.
+ */
+function tidyAfterTimer(before: AppData, after: AppData, today: ISODate): AppData {
+  const timed = before.tasks.find((t) => t.id === before.timer?.taskId);
+  return timed?.seriesId && timed.dueDate < today ? fillSeries(after, today) : after;
 }
 
 /** Drops the running timer if it's on this task. */
@@ -184,13 +193,13 @@ function apply(state: AppData, action: Action): AppData {
     case 'timer/start': {
       if (state.timer?.taskId === action.taskId || !state.tasks.some((t) => t.id === action.taskId)) return state;
       // Only one timer runs at a time: starting another logs the one that was running.
-      const stopped = stopTimer(state, action.at, action.date);
+      const stopped = tidyAfterTimer(state, stopTimer(state, action.at, action.date), action.date);
       return { ...stopped, timer: { taskId: action.taskId, startedAt: action.at } };
     }
     case 'timer/stop':
-      return stopTimer(state, action.at, action.date);
+      return tidyAfterTimer(state, stopTimer(state, action.at, action.date), action.date);
     case 'timer/cancel':
-      return state.timer ? withoutTimerOn(state, state.timer.taskId) : state;
+      return state.timer ? tidyAfterTimer(state, withoutTimerOn(state, state.timer.taskId), action.date) : state;
     case 'hours/setWeekday':
       return {
         ...state,

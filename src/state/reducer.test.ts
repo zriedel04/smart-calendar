@@ -173,7 +173,7 @@ describe('hasUserData', () => {
     it('cancels without logging, and stops when the task is ticked, finished, deleted or skipped', () => {
       let { state, essay } = withTwoTasks();
       const start = (s: typeof state) => reducer(s, { type: 'timer/start', taskId: essay, at: at(0), date: '2026-11-02' });
-      state = reducer(start(state), { type: 'timer/cancel' });
+      state = reducer(start(state), { type: 'timer/cancel', date: '2026-11-02' });
       expect(state).not.toHaveProperty('timer');
       expect(state.logs).toHaveLength(0);
 
