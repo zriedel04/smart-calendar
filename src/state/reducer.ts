@@ -1,11 +1,13 @@
 import type { CalendarEvent } from '../lib/availability';
-import type { ISODate, Weekday } from '../lib/dates';
+import { addDays, type ISODate, type Weekday } from '../lib/dates';
 import type { TimeRange } from '../lib/time';
 import { createId } from './ids';
-import type { AppData, Task } from './types';
+import { fillSeries } from './recurring';
+import type { AppData, Task, TaskSeries } from './types';
 
 export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes' | 'sourceId'>;
 export type EventDraft = Omit<CalendarEvent, 'id'>;
+export type SeriesDraft = Pick<TaskSeries, 'title' | 'estimateMinutes' | 'notes' | 'days' | 'startDate' | 'until'>;
 
 export type Action =
   | { type: 'task/add'; draft: TaskDraft }
@@ -23,7 +25,19 @@ export type Action =
   | { type: 'event/update'; id: string; draft: EventDraft }
   | { type: 'event/delete'; id: string }
   | { type: 'import/add'; tasks: TaskDraft[]; events: EventDraft[] }
+  | { type: 'series/add'; draft: SeriesDraft; today: ISODate }
+  | { type: 'series/update'; id: string; draft: SeriesDraft; today: ISODate }
+  | { type: 'series/stop'; id: string; today: ISODate }
+  | { type: 'series/fill'; today: ISODate }
   | { type: 'data/replace'; data: AppData };
+
+/** Removes a series' copies from today on that you haven't started or finished. */
+function dropUpcomingCopies(state: AppData, seriesId: string, today: ISODate): Task[] {
+  const started = new Set(state.logs.map((l) => l.taskId));
+  return state.tasks.filter(
+    (t) => t.seriesId !== seriesId || t.dueDate < today || t.completedAt !== undefined || started.has(t.id),
+  );
+}
 
 export function reducer(state: AppData, action: Action): AppData {
   switch (action.type) {
@@ -118,6 +132,28 @@ export function reducer(state: AppData, action: Action): AppData {
         events: [...state.events, ...action.events.map((draft) => ({ ...draft, id: createId() }))],
       };
     }
+    case 'series/add': {
+      const series: TaskSeries = { ...action.draft, id: createId(), createdAt: new Date().toISOString() };
+      return fillSeries({ ...state, series: [...(state.series ?? []), series] }, action.today);
+    }
+    case 'series/update': {
+      // Upcoming copies are made again from the new details; ones you started keep theirs.
+      const tasks = dropUpcomingCopies(state, action.id, action.today);
+      const series = (state.series ?? []).map((s) => {
+        if (s.id !== action.id) return s;
+        const { filledThrough: _filled, until: _until, notes: _notes, ...rest } = s;
+        return { ...rest, ...action.draft, filledThrough: addDays(action.today, -1) };
+      });
+      return fillSeries({ ...state, tasks, series }, action.today);
+    }
+    case 'series/stop':
+      return {
+        ...state,
+        tasks: dropUpcomingCopies(state, action.id, action.today),
+        series: (state.series ?? []).filter((s) => s.id !== action.id),
+      };
+    case 'series/fill':
+      return fillSeries(state, action.today);
     case 'data/replace':
       return action.data;
   }

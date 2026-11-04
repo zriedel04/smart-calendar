@@ -1,13 +1,24 @@
-import { Trash2 } from 'lucide-react';
+import { Repeat, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { addDays, isISODate, type ISODate } from '../lib/dates';
+import { addDays, isISODate, weekdayOf, WEEKDAY_NAMES, type ISODate, type Weekday } from '../lib/dates';
 import { formatDuration } from '../lib/time';
 import { useStore } from '../state/context';
-import type { Task } from '../state/types';
+import { EVERY_DAY, seriesRepeatLabel, WEEKDAYS } from '../state/recurring';
+import type { SeriesDraft } from '../state/reducer';
+import type { Task, TaskSeries } from '../state/types';
 import { inputClass } from './styles';
 import { Button, Field, Modal } from './ui';
 
 const QUICK_ESTIMATES = [0.5, 1, 2, 4];
+
+type RepeatChoice = 'none' | 'daily' | 'weekdays' | 'weekly' | 'custom';
+
+function choiceFor(days: readonly Weekday[]): RepeatChoice {
+  if (days.length === 7) return 'daily';
+  if (days.length === 5 && WEEKDAYS.every((d) => days.includes(d))) return 'weekdays';
+  if (days.length === 1) return 'weekly';
+  return 'custom';
+}
 
 export function TaskForm({
   task,
@@ -22,19 +33,33 @@ export function TaskForm({
   onAddMany?: () => void;
 }) {
   const { data, dispatch } = useStore();
-  const [title, setTitle] = useState(task?.title ?? '');
-  const [dueDate, setDueDate] = useState(task?.dueDate ?? addDays(today, 7));
-  const [hours, setHours] = useState(task ? String(task.estimateMinutes / 60) : '');
-  const [notes, setNotes] = useState(task?.notes ?? '');
+  // Editing one day's copy of a repeating task edits the repeating task itself.
+  const series: TaskSeries | undefined = task?.seriesId ? data.series?.find((s) => s.id === task.seriesId) : undefined;
+  const source = series ?? task;
+  const [title, setTitle] = useState(source?.title ?? '');
+  const [dueDate, setDueDate] = useState(series?.startDate ?? task?.dueDate ?? addDays(today, 7));
+  const [hours, setHours] = useState(source ? String(source.estimateMinutes / 60) : '');
+  const [notes, setNotes] = useState(source?.notes ?? '');
+  const [repeat, setRepeat] = useState<RepeatChoice>(series ? choiceFor(series.days) : 'none');
+  const [until, setUntil] = useState(series?.until ?? '');
   const [submitted, setSubmitted] = useState(false);
+  const repeats = repeat !== 'none';
 
   const estimateMinutes = Math.round(Number(hours) * 60);
   const errors = {
     title: title.trim() ? null : 'Give the task a name.',
-    dueDate: isISODate(dueDate) ? null : 'Pick a due date.',
+    dueDate: isISODate(dueDate) ? null : repeats ? 'Pick the first day.' : 'Pick a due date.',
     hours: Number.isFinite(estimateMinutes) && estimateMinutes >= 5 ? null : 'Enter at least 5 minutes (0.1 hours).',
+    until: !repeats || !until || (isISODate(until) && until >= dueDate) ? null : 'Pick a day after the first one.',
   };
-  const valid = !errors.title && !errors.dueDate && !errors.hours;
+  const valid = !errors.title && !errors.dueDate && !errors.hours && !errors.until;
+
+  function repeatDays(): Weekday[] {
+    if (repeat === 'daily') return EVERY_DAY;
+    if (repeat === 'weekdays') return WEEKDAYS;
+    if (repeat === 'custom' && series) return series.days;
+    return isISODate(dueDate) ? [weekdayOf(dueDate)] : [];
+  }
   const logged = task
     ? data.logs.filter((l) => l.taskId === task.id).reduce((sum, l) => sum + l.minutes, 0)
     : 0;
@@ -43,15 +68,43 @@ export function TaskForm({
     e.preventDefault();
     setSubmitted(true);
     if (!valid) return;
-    const draft = { title: title.trim(), dueDate, estimateMinutes, notes: notes.trim() || undefined };
-    dispatch(task ? { type: 'task/update', id: task.id, draft } : { type: 'task/add', draft });
+    if (repeats) {
+      const draft: SeriesDraft = {
+        title: title.trim(),
+        estimateMinutes,
+        notes: notes.trim() || undefined,
+        days: repeatDays(),
+        startDate: dueDate,
+        ...(until ? { until } : {}),
+      };
+      if (series) dispatch({ type: 'series/update', id: series.id, draft, today });
+      else {
+        dispatch({ type: 'series/add', draft, today });
+        // A one-off task you turned into a repeating one is replaced by its copies.
+        if (task) dispatch({ type: 'task/delete', id: task.id });
+      }
+    } else {
+      const draft = { title: title.trim(), dueDate, estimateMinutes, notes: notes.trim() || undefined };
+      dispatch(task ? { type: 'task/update', id: task.id, draft } : { type: 'task/add', draft });
+    }
     onClose();
   }
 
   function remove() {
     if (!task) return;
-    if (window.confirm(`Delete "${task.title}"? This also removes the time you logged on it.`)) {
+    const message = series
+      ? `Skip "${task.title}" on this day? It still repeats on the other days.`
+      : `Delete "${task.title}"? This also removes the time you logged on it.`;
+    if (window.confirm(message)) {
       dispatch({ type: 'task/delete', id: task.id });
+      onClose();
+    }
+  }
+
+  function stopRepeating() {
+    if (!series) return;
+    if (window.confirm(`Stop repeating "${series.title}"? Upcoming days you haven't started are removed.`)) {
+      dispatch({ type: 'series/stop', id: series.id, today });
       onClose();
     }
   }
@@ -61,13 +114,13 @@ export function TaskForm({
 
   return (
     <Modal
-      title={task ? 'Edit task' : 'Add a task'}
+      title={series ? 'Edit repeating task' : task ? 'Edit task' : 'Add a task'}
       onClose={onClose}
       footer={
         <>
           {task && (
             <Button variant="danger" onClick={remove} className="mr-auto">
-              <Trash2 className="size-4" /> Delete
+              <Trash2 className="size-4" /> {series ? 'Skip this day' : 'Delete'}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
@@ -94,7 +147,7 @@ export function TaskForm({
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Due date" hint={error(errors.dueDate)}>
+          <Field label={repeats ? 'First day' : 'Due date'} hint={error(errors.dueDate)}>
             {(id) => (
               <input
                 id={id}
@@ -105,7 +158,7 @@ export function TaskForm({
               />
             )}
           </Field>
-          <Field label="Estimated hours" hint={error(errors.hours)}>
+          <Field label={repeats ? 'Hours each day' : 'Estimated hours'} hint={error(errors.hours)}>
             {(id) => (
               <input
                 id={id}
@@ -135,7 +188,59 @@ export function TaskForm({
           ))}
         </div>
 
-        {task && logged > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Repeats">
+            {(id) => (
+              <select
+                id={id}
+                className={inputClass}
+                value={repeat}
+                onChange={(e) => {
+                  const next = e.target.value as RepeatChoice;
+                  // A new repeating task usually starts today, not on the default due date a week out.
+                  if (!task && repeat === 'none' && next !== 'none' && dueDate === addDays(today, 7)) setDueDate(today);
+                  if (!task && repeat !== 'none' && next === 'none' && dueDate === today) setDueDate(addDays(today, 7));
+                  setRepeat(next);
+                }}
+              >
+                {!series && <option value="none">Doesn't repeat</option>}
+                <option value="daily">Every day</option>
+                <option value="weekdays">Every weekday</option>
+                <option value="weekly">
+                  {isISODate(dueDate) ? `Every ${WEEKDAY_NAMES[weekdayOf(dueDate)]}` : 'Every week'}
+                </option>
+                {series && repeat === 'custom' && <option value="custom">{seriesRepeatLabel(series.days)}</option>}
+              </select>
+            )}
+          </Field>
+          {repeats && (
+            <Field label="Last day (optional)" hint={error(errors.until)}>
+              {(id) => (
+                <input id={id} type="date" className={inputClass} value={until} onChange={(e) => setUntil(e.target.value)} />
+              )}
+            </Field>
+          )}
+        </div>
+
+        {repeats && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {series
+              ? 'Changes apply to upcoming days you haven\'t started.'
+              : 'Each day gets its own item on your list, planned on that day. Missed days are skipped, not piled up.'}
+          </p>
+        )}
+
+        {series && (
+          <button
+            type="button"
+            onClick={stopRepeating}
+            className="flex items-center gap-1.5 text-sm font-medium text-rose-600 hover:text-rose-500 dark:text-rose-400"
+          >
+            <Repeat className="size-4" /> Stop repeating
+          </button>
+        )}
+
+        {task && !series && logged > 0 && (
           <p className="text-sm text-slate-500 dark:text-slate-400">
             You've logged {formatDuration(logged)} on this so far.
           </p>

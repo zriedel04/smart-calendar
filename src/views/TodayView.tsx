@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Plus, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Plus, Repeat, SkipForward, Sparkles } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventsOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { addDays, formatDate, relativeDayPhrase } from '../lib/dates';
@@ -49,7 +49,7 @@ export function TodayView({
   const atRisk = openTasks.filter((t) => plan.forecasts.get(t.id)?.atRisk);
   const freeLeft = Math.max(0, capacity - goal);
   // Tasks pushed off today that would otherwise still need work.
-  const pushed = openTasks.filter((t) => t.notBefore && t.notBefore > today);
+  const pushed = openTasks.filter((t) => !t.seriesId && t.notBefore && t.notBefore > today);
   const [openRow, setOpenRow] = useState<string | null>(null);
 
   return (
@@ -181,7 +181,9 @@ export function TodayView({
                   badge={<PriorityBadge priority={priorityOf(task.dueDate, today)} />}
                   meta={
                     <>
-                      {formatDuration(item.minutes)} · due {relativeDayPhrase(task.dueDate, today)}
+                      {task.seriesId && <Repeat className="mr-1 inline size-3.5 align-[-2px]" aria-label="Repeats" />}
+                      {formatDuration(item.minutes)}
+                      {task.seriesId ? '' : ` · due ${relativeDayPhrase(task.dueDate, today)}`}
                       {item.minutes < left && ` · ${formatDuration(left)} left in total`}
                     </>
                   }
@@ -198,7 +200,12 @@ export function TodayView({
                         setOpenRow(null);
                       }}
                       onPush={() => {
-                        dispatch({ type: 'task/push', id: task.id, until: addDays(today, 1) });
+                        // A repeating task's copy belongs to its day, so pushing it skips the day.
+                        dispatch(
+                          task.seriesId
+                            ? { type: 'task/delete', id: task.id }
+                            : { type: 'task/push', id: task.id, until: addDays(today, 1) },
+                        );
                         setOpenRow(null);
                       }}
                     />
@@ -381,7 +388,15 @@ function RowActions({
         </span>
       </form>
       <Button size="sm" variant="ghost" onClick={onPush}>
-        <ArrowRight className="size-4" /> Push to tomorrow
+        {task.seriesId ? (
+          <>
+            <SkipForward className="size-4" /> Skip today
+          </>
+        ) : (
+          <>
+            <ArrowRight className="size-4" /> Push to tomorrow
+          </>
+        )}
       </Button>
     </div>
   );

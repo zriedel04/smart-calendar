@@ -14,6 +14,7 @@ export function createEmptyData(): AppData {
     weeklyHours: [[], NOON_TO_SIX, NOON_TO_SIX, NOON_TO_SIX, NOON_TO_SIX, NOON_TO_SIX, []],
     overrides: {},
     events: [],
+    series: [],
   };
 }
 
@@ -38,6 +39,17 @@ export function createSampleData(today: ISODate): AppData {
       task('Read chapters 9 and 10 for history', 6, 2.5),
       task('Portfolio site: projects page', 9, 5),
       task('Study for networking midterm', 13, 8),
+    ],
+    // Its daily copies are made when the app next fills repeating tasks.
+    series: [
+      {
+        id: createId(),
+        title: 'Review Spanish flashcards',
+        estimateMinutes: 30,
+        days: [1, 2, 3, 4, 5],
+        startDate: today,
+        createdAt: now,
+      },
     ],
     events: [
       {
@@ -79,6 +91,7 @@ export function hasUserData(data: AppData): boolean {
     data.tasks.length > 0 ||
     data.logs.length > 0 ||
     data.events.length > 0 ||
+    (data.series?.length ?? 0) > 0 ||
     Object.keys(data.overrides).length > 0 ||
     JSON.stringify(data.weeklyHours) !== JSON.stringify(empty.weeklyHours)
   );

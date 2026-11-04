@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+import { createEmptyData } from './defaults';
+import { fillSeries, seriesRepeatLabel, WEEKDAYS } from './recurring';
+import { reducer, type SeriesDraft } from './reducer';
+import { parseAppData } from './storage';
+import type { AppData } from './types';
+
+const MONDAY = '2026-11-02';
+const study: SeriesDraft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: MONDAY };
+
+const add = (draft: SeriesDraft = study, today = MONDAY) =>
+  reducer(createEmptyData(), { type: 'series/add', draft, today });
+const dates = (data: AppData) => data.tasks.map((t) => t.dueDate).sort();
+
+describe('repeating tasks', () => {
+  it('makes a copy for each matching day in the next week, planned on its own day', () => {
+    const data = add();
+    expect(dates(data)).toEqual(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']);
+    expect(data.tasks[1]).toMatchObject({ title: 'Study', estimateMinutes: 60, notBefore: '2026-11-03', seriesId: data.series![0]!.id });
+  });
+
+  it('adds new days as time passes, without bringing back a day you skipped', () => {
+    let data = add();
+    data = reducer(data, { type: 'task/delete', id: data.tasks.find((t) => t.dueDate === '2026-11-03')!.id });
+    data = fillSeries(data, '2026-11-03');
+    expect(dates(data)).toEqual(['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-09']);
+    expect(fillSeries(data, '2026-11-03')).toBe(data);
+  });
+
+  it("clears a missed day, but keeps one you logged time on as finished", () => {
+    let data = add();
+    const tuesday = data.tasks.find((t) => t.dueDate === '2026-11-03')!;
+    data = reducer(data, { type: 'work/log', taskId: tuesday.id, date: '2026-11-03', minutes: 20 });
+    data = fillSeries(data, '2026-11-04');
+    expect(data.tasks.some((t) => t.dueDate === '2026-11-02')).toBe(false);
+    expect(data.tasks.find((t) => t.id === tuesday.id)?.completedAt).toBeDefined();
+  });
+
+  it('stops at its last day', () => {
+    expect(dates(add({ ...study, until: '2026-11-03' }))).toEqual(['2026-11-02', '2026-11-03']);
+  });
+
+  it('remakes upcoming days after an edit, keeping a day you started', () => {
+    let data = add();
+    const id = data.series![0]!.id;
+    const monday = data.tasks.find((t) => t.dueDate === MONDAY)!;
+    data = reducer(data, { type: 'work/log', taskId: monday.id, date: MONDAY, minutes: 15 });
+    data = reducer(data, { type: 'series/update', id, draft: { ...study, title: 'Review notes', days: [1, 3] }, today: MONDAY });
+    expect(data.tasks.map((t) => [t.dueDate, t.title]).sort()).toEqual([
+      ['2026-11-02', 'Study'],
+      ['2026-11-04', 'Review notes'],
+    ]);
+  });
+
+  it('stops repeating, removing upcoming days you have not started', () => {
+    let data = add();
+    data = reducer(data, { type: 'series/stop', id: data.series![0]!.id, today: '2026-11-03' });
+    expect(data.series).toEqual([]);
+    expect(dates(data)).toEqual(['2026-11-02']);
+  });
+
+  it('saves and loads repeating tasks', () => {
+    const data = add();
+    const loaded = parseAppData(JSON.stringify(data));
+    expect(loaded.series).toEqual(data.series);
+    expect(loaded.tasks[0]?.seriesId).toBe(data.series![0]!.id);
+  });
+
+  it('describes how often it repeats', () => {
+    expect(seriesRepeatLabel([0, 1, 2, 3, 4, 5, 6])).toBe('Every day');
+    expect(seriesRepeatLabel(WEEKDAYS)).toBe('Every weekday');
+    expect(seriesRepeatLabel([0])).toBe('Every Sunday');
+    expect(seriesRepeatLabel([5, 1, 3])).toBe('Every Mon, Wed, Fri');
+  });
+});

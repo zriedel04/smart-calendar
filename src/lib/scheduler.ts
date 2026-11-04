@@ -27,6 +27,8 @@ export interface SchedulableTask {
   createdAt?: string;
   /** No work is planned on the task before this date, such as after pushing it to tomorrow. */
   notBefore?: ISODate;
+  /** No work is planned on the task after this date; whatever is left stays unscheduled. */
+  lastDate?: ISODate;
 }
 
 export interface PlanItem {
@@ -94,7 +96,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     .filter((t) => t.remainingMinutes > 0)
     .slice()
     .sort(compareTasks)
-    .map((task) => ({ task, left: Math.round(task.remainingMinutes) }));
+    .map((task) => ({ task, left: Math.round(task.remainingMinutes), expired: false }));
 
   const days: DayPlan[] = [];
   const lastDay = new Map<string, ISODate>();
@@ -108,7 +110,13 @@ export function buildSchedule(input: ScheduleInput): Schedule {
 
     for (const entry of queue) {
       if (free <= 0) break;
-      if (entry.left <= 0) continue;
+      if (entry.left <= 0 || entry.expired) continue;
+      if (entry.task.lastDate && date > entry.task.lastDate) {
+        // Past its last day: what's left can't be placed, so stop counting it as work to do.
+        entry.expired = true;
+        workLeft -= entry.left;
+        continue;
+      }
       if (entry.task.notBefore && date < entry.task.notBefore) continue;
 
       const slice = Math.min(entry.left, free);

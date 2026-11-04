@@ -23,6 +23,21 @@ const todayItems = (d: AppData) =>
     .items.map((i) => `${i.taskId}:${i.minutes}`);
 
 describe('planFor', () => {
+  it("keeps a repeating task's copy on its own day, even when the day has no work hours", () => {
+    // Sunday Nov 8 has no hours by default; Thursday's copy is bigger than the free time.
+    const d = data({
+      tasks: [
+        task('laundry', '2026-11-08', 1, { notBefore: '2026-11-08', seriesId: 's' }),
+        task('study', '2026-11-05', 8, { notBefore: '2026-11-05', seriesId: 's2' }),
+      ],
+    });
+    const plan = planFor(d, TODAY);
+    expect(plan.dayPlan('2026-11-08').items).toEqual([{ taskId: 'laundry', date: '2026-11-08', minutes: 60 }]);
+    expect(plan.dayPlan('2026-11-05').items).toEqual([{ taskId: 'study', date: '2026-11-05', minutes: h(8) }]);
+    expect(plan.dayPlan('2026-11-06').items).toEqual([]);
+    expect(plan.forecasts.get('laundry')).toMatchObject({ atRisk: false, finishDate: '2026-11-08' });
+  });
+
   it("keeps the rest of today's list the same after you tick something off", () => {
     const base = data({ tasks: [task('a', '2026-11-05', 2), task('b', '2026-11-06', 3), task('c', '2026-11-09', 5)] });
     expect(todayItems(base)).toEqual(['a:120', 'b:180', 'c:60']);

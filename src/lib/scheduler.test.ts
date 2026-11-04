@@ -23,6 +23,16 @@ function summarize(schedule: ReturnType<typeof buildSchedule>): Record<ISODate, 
 }
 
 describe('buildSchedule', () => {
+  it('plans no work on a task after its lastDate and leaves the rest unscheduled', () => {
+    const schedule = buildSchedule({
+      today: TODAY,
+      tasks: [{ ...task('study', 0, 4), lastDate: TODAY }, task('lab', 3, 2)],
+      capacityOn: every(h(3)),
+    });
+    expect(summarize(schedule)).toEqual({ [TODAY]: ['study:180'], [addDays(TODAY, 1)]: ['lab:120'] });
+    expect(schedule.forecasts.get('study')).toMatchObject({ unscheduledMinutes: 60, atRisk: true });
+  });
+
   it('plans no work on a task before its notBefore date, giving the time to other tasks', () => {
     const schedule = buildSchedule({
       today: TODAY,

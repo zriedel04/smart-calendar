@@ -50,6 +50,11 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(tabFromHash);
   const [dialog, setDialog] = useState<Dialog>(null);
 
+  // Keep repeating tasks' copies a week ahead, and clear missed ones, as days go by.
+  useEffect(() => {
+    dispatch({ type: 'series/fill', today });
+  }, [dispatch, today, data.series]);
+
   useEffect(() => {
     const onHash = () => setTab(tabFromHash());
     window.addEventListener('hashchange', onHash);
