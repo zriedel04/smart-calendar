@@ -99,6 +99,20 @@ describe('mergeAppData', () => {
     }
   });
 
+  it("drops new days that don't fit a repeating task changed on the other device", () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const id = base.series![0]!.id;
+    // On Tuesday the laptop adds next Monday's day, while the phone changes the task to Tuesdays only.
+    const laptop = reducer(base, { type: 'series/fill', today: '2026-11-03' });
+    const phone = reducer(base, { type: 'series/update', id, draft: { ...draft, days: [2] }, today: '2026-11-03' });
+    for (const merged of [mergeAppData(base, laptop, phone), mergeAppData(base, phone, laptop)]) {
+      const filled = reducer(merged, { type: 'series/fill', today: '2026-11-03' });
+      const upcoming = filled.tasks.filter((t) => t.seriesId === id && t.dueDate >= '2026-11-03').map((t) => t.dueDate);
+      expect(upcoming.sort()).toEqual(['2026-11-03']);
+    }
+  });
+
   it('keeps a day skipped on one device while the other moved on to a new day', () => {
     const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
     const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });

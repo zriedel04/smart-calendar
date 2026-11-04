@@ -1,4 +1,5 @@
-import type { AppData, TaskSeries } from '../state/types';
+import { weekdayOf } from '../lib/dates';
+import type { AppData, Task, TaskSeries } from '../state/types';
 
 /** True if two JSON-like values hold the same data, whatever order their keys are in. */
 export function sameData(a: unknown, b: unknown): boolean {
@@ -157,6 +158,29 @@ function keepStartedCopies(local: AppData, remote: AppData, data: AppData) {
 }
 
 /**
+ * One device made new days for a repeating task while the other changed it, say to Tuesdays only.
+ * New days that no longer fit the merged task (wrong weekday, outside its dates, or old details)
+ * are dropped unless you started or finished them. Filling the series makes the right ones.
+ */
+function dropCopiesThatDontFit(base: AppData, data: AppData) {
+  const seriesById = new Map((data.series ?? []).map((s) => [s.id, s]));
+  const inBase = new Set(base.tasks.map((t) => t.id));
+  const started = new Set([...data.logs.map((l) => l.taskId), ...(data.timer ? [data.timer.taskId] : [])]);
+  const fits = (t: Task, s: TaskSeries) =>
+    s.days.includes(weekdayOf(t.dueDate)) &&
+    t.dueDate >= s.startDate &&
+    (!s.until || t.dueDate <= s.until) &&
+    !s.skipped?.includes(t.dueDate) &&
+    t.title === s.title &&
+    t.estimateMinutes === s.estimateMinutes &&
+    (t.notes ?? '') === (s.notes ?? '');
+  data.tasks = data.tasks.filter((t) => {
+    const s = t.seriesId ? seriesById.get(t.seriesId) : undefined;
+    return !s || inBase.has(t.id) || t.completedAt || started.has(t.id) || fits(t, s);
+  });
+}
+
+/**
  * Combines this device's calendar with the one saved in the account.
  *
  * `base` is the version both last agreed on (the last successful sync). Comparing each side with it
@@ -181,6 +205,7 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   keepStartedCopies(local, remote, merged);
   dedupeCopies(merged);
   dropCopiesOfStoppedSeries(base, merged);
+  dropCopiesThatDontFit(base, merged);
 
   // Work logged or a timer running on a task deleted on the other device would point at nothing.
   const taskIds = new Set(merged.tasks.map((t) => t.id));
