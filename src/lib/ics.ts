@@ -297,6 +297,12 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
     if (!bounded && d > horizon) break;
     const inSeries = byDate || weekdays.includes(weekdayOf(d));
     const moment = inSeries ? occurrenceAt(d) : null;
+    if (inSeries && !moment) {
+      // A date that doesn't exist (Feb 29 in other years) is skipped. Only a run that sits on Feb 29
+      // locally skips those years by itself; any other run would show up in the gap, so it ends here.
+      const run = runs.get(weekdays[0]!)!.at(-1);
+      if (run && run.first.slice(5) !== '02-29') run.broken = true;
+    }
     if (moment) {
       if (untilInstant !== null && moment.instant > untilInstant) break;
       seen++;

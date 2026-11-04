@@ -170,4 +170,13 @@ describe('parseIcs', () => {
       ['2026-04-30', '2026-04-30'],
     ]);
   });
+
+  it('keeps leap-year gaps when converting zones moves Feb 29 to Feb 28', () => {
+    // 1am UTC on Feb 29 is 6pm on Feb 28 in Phoenix, which happens every year, so the series is split.
+    const entries = parseIcs(calendar('UID:lz\r\nSUMMARY:Leap call\r\nDTSTART:20240229T010000Z\r\nDTEND:20240229T020000Z\r\nRRULE:FREQ=YEARLY;COUNT=2'));
+    expect(entries.map((e) => [e.date, e.until])).toEqual([
+      ['2024-02-28', '2024-02-28'],
+      ['2028-02-28', '2028-02-28'],
+    ]);
+  });
 });
