@@ -307,7 +307,16 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
       } else {
         const startAt = moment.minutes ?? 0;
         const endAt = allDay ? 0 : Math.min(startAt + length, 24 * 60);
-        if (run && !run.broken && run.start === startAt && run.end === endAt) run.last = moment.date;
+        // Converting zones can move an occurrence to another day of the month (Mar 1 UTC is Feb 28 here),
+        // so a run only continues while each occurrence lands on the day its repeat rule would give.
+        const sameSlot =
+          run &&
+          (rule.FREQ === 'WEEKLY'
+            ? weekdayOf(moment.date) === weekdayOf(run.first)
+            : rule.FREQ === 'MONTHLY'
+              ? moment.date.slice(8) === run.first.slice(8)
+              : moment.date.slice(5) === run.first.slice(5));
+        if (run && sameSlot && !run.broken && run.start === startAt && run.end === endAt) run.last = moment.date;
         else series.push({ first: moment.date, last: moment.date, start: startAt, end: endAt, broken: false });
       }
     }

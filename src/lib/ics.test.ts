@@ -160,4 +160,14 @@ describe('parseIcs', () => {
     const [rent] = parseIcs(calendar('UID:m2\r\nSUMMARY:Rent\r\nDTSTART;VALUE=DATE:20261031\r\nRRULE:FREQ=MONTHLY'));
     expect(rent?.repeat).toBe('none');
   });
+
+  it('splits a monthly series when converting zones moves it to another day of the month', () => {
+    // 1am UTC on the 1st is 6pm on the last day of the previous month in Phoenix.
+    const entries = parseIcs(calendar('UID:mz\r\nSUMMARY:Report\r\nDTSTART:20260301T010000Z\r\nDTEND:20260301T020000Z\r\nRRULE:FREQ=MONTHLY;COUNT=3'));
+    expect(entries.map((e) => [e.date, e.until])).toEqual([
+      ['2026-02-28', '2026-02-28'],
+      ['2026-03-31', '2026-03-31'],
+      ['2026-04-30', '2026-04-30'],
+    ]);
+  });
 });
