@@ -86,6 +86,65 @@ describe('App', () => {
     expect(screen.queryByText('Pushed to tomorrow')).not.toBeInTheDocument();
   });
 
+  it('adds a repeating task that lands on each matching day', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Study Spanish');
+    await user.selectOptions(within(dialog).getByLabelText('Repeats'), 'Every weekday');
+    expect(within(dialog).getByLabelText('First day')).toHaveValue('2026-11-02');
+    await user.type(within(dialog).getByLabelText('Hours each day'), '1');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+
+    // Today's copy is on the list, and skipping it doesn't push it to tomorrow.
+    expect(within(todaysList()).getByText('Study Spanish')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'More for "Study Spanish"' }));
+    await user.click(screen.getByRole('button', { name: 'Skip today' }));
+    expect(within(todaysList()).queryByText('Study Spanish')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pushed to tomorrow')).not.toBeInTheDocument();
+
+    // The Tasks tab shows it once, with the next day it lands on.
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(screen.getAllByText('Study Spanish')).toHaveLength(1);
+    expect(screen.getByText(/Every weekday/)).toBeInTheDocument();
+    expect(screen.getByText(/Next tomorrow/)).toBeInTheDocument();
+
+    // Stopping it removes the upcoming days.
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByText('Study Spanish'));
+    await user.click(within(screen.getByRole('dialog', { name: 'Edit repeating task' })).getByRole('button', { name: 'Stop repeating' }));
+    expect(screen.queryByText('Study Spanish')).not.toBeInTheDocument();
+  });
+
+  it('keeps logged time when a task becomes repeating, and lists a repeating task with nothing to do yet', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Piano practice');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '1');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Mark "Piano practice" done' }));
+    expect(screen.getByText('1h of 1h done')).toBeInTheDocument();
+
+    // Make it repeat on Saturdays, starting next month: today's logged hour stays.
+    await user.click(within(todaysList()).getByText('Piano practice'));
+    dialog = screen.getByRole('dialog', { name: 'Edit task' });
+    fireEvent.change(within(dialog).getByLabelText('Due date'), { target: { value: '2026-12-05' } });
+    await user.selectOptions(within(dialog).getByLabelText('Repeats'), 'Every Saturday');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(screen.getByText('1h of 1h done')).toBeInTheDocument();
+
+    // It has no copies yet, but the Tasks tab still shows it and can stop it.
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByText(/Every Saturday · Next Sat, Dec 5/)).toBeInTheDocument();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: /Piano practice.*Every Saturday/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Edit repeating task' })).getByRole('button', { name: 'Stop repeating' }));
+    expect(screen.queryByText(/Every Saturday/)).not.toBeInTheDocument();
+  });
+
   it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
     const user = userEvent.setup();
     const { container } = renderApp();
@@ -121,7 +180,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Schedule' }));
     fireEvent.change(screen.getByLabelText('Monday block 1 end'), { target: { value: '16:00' } });
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(saved.tasks).toHaveLength(6);
+    expect(saved.tasks.filter((t: { seriesId?: string }) => !t.seriesId)).toHaveLength(6);
     expect(saved.weeklyHours[1]).toEqual([{ start: 720, end: 960 }]);
   });
 

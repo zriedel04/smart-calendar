@@ -1,4 +1,4 @@
-import { CalendarPlus, Check, ListTodo, Plus, RotateCcw } from 'lucide-react';
+import { CalendarPlus, Check, ListTodo, Plus, Repeat, RotateCcw } from 'lucide-react';
 import { relativeDayLabel, relativeDayPhrase, type ISODate } from '../lib/dates';
 import { PRIORITY_ORDER, priorityOf, type Priority } from '../lib/priority';
 import { compareTasks } from '../lib/scheduler';
@@ -7,7 +7,8 @@ import { cx } from '../components/cx';
 import { Button, Card, EmptyState, PriorityBadge, ProgressBar } from '../components/ui';
 import { useStore } from '../state/context';
 import { isTaskComplete, type Plan } from '../state/planner';
-import type { Task } from '../state/types';
+import { nextSeriesDate, seriesRepeatLabel } from '../state/recurring';
+import type { Task, TaskSeries } from '../state/types';
 
 const GROUP_DESCRIPTIONS: Record<Priority, string> = {
   overdue: 'Past their due date',
@@ -29,19 +30,33 @@ export function TasksView({
   onAddMany,
   onImport,
   onEditTask,
+  onEditSeries,
 }: {
   plan: Plan;
   onAddTask: () => void;
   onAddMany: () => void;
   onImport: () => void;
   onEditTask: (task: Task) => void;
+  onEditSeries: (series: TaskSeries) => void;
 }) {
   const { data, dispatch } = useStore();
   const { today } = plan;
   const logged = (task: Task) => plan.logged.get(task.id) ?? 0;
 
+  // A repeating task shows only its next open day here, so a week of copies doesn't crowd the list.
+  const nextCopy = new Map<string, Task>();
+  for (const t of data.tasks) {
+    if (!t.seriesId || isTaskComplete(t, logged(t))) continue;
+    const current = nextCopy.get(t.seriesId);
+    if (!current || t.dueDate < current.dueDate) nextCopy.set(t.seriesId, t);
+  }
+  const seriesById = new Map((data.series ?? []).map((s) => [s.id, s]));
+  // Repeating tasks with no open copy right now, such as one that starts next month or a day you
+  // just skipped, still show here so you can change or stop them.
+  const waiting = (data.series ?? []).filter((s) => !nextCopy.has(s.id));
+
   const open = data.tasks
-    .filter((t) => !isTaskComplete(t, logged(t)))
+    .filter((t) => !isTaskComplete(t, logged(t)) && (!t.seriesId || nextCopy.get(t.seriesId) === t))
     .sort((a, b) =>
       compareTasks(
         { id: a.id, dueDate: a.dueDate, remainingMinutes: 0, createdAt: a.createdAt },
@@ -49,7 +64,7 @@ export function TasksView({
       ),
     );
   const completed = data.tasks
-    .filter((t) => isTaskComplete(t, logged(t)))
+    .filter((t) => isTaskComplete(t, logged(t)) && !t.seriesId)
     .sort((a, b) => (a.dueDate < b.dueDate ? 1 : -1));
 
   const groups = PRIORITY_ORDER.map((priority) => ({
@@ -76,7 +91,31 @@ export function TasksView({
         </div>
       </div>
 
-      {open.length === 0 && (
+      {waiting.length > 0 && (
+        <Card className="p-2 sm:p-3">
+          <div className="flex items-center gap-2 px-2 pt-1 pb-2 text-sm text-slate-500 dark:text-slate-400">
+            <Repeat className="size-4" aria-hidden /> Repeating, nothing to do yet
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {waiting.map((s) => {
+              const next = nextSeriesDate(s, today);
+              return (
+                <li key={s.id}>
+                  <button type="button" onClick={() => onEditSeries(s)} className="w-full px-2 py-3 text-left">
+                    <p className="truncate font-medium text-slate-900 dark:text-white">{s.title}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {seriesRepeatLabel(s.days)} · {next ? `Next ${relativeDayPhrase(next, today)}` : 'Ended'} ·{' '}
+                      {formatDuration(s.estimateMinutes)}
+                    </p>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {open.length === 0 && waiting.length === 0 && (
         <Card>
           <EmptyState
             icon={<ListTodo className="size-6" />}
@@ -116,8 +155,13 @@ export function TasksView({
                   <button type="button" onClick={() => onEditTask(task)} className="min-w-0 flex-1 text-left">
                     <p className="truncate font-medium text-slate-900 dark:text-white">{task.title}</p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
+                      {task.seriesId && seriesById.has(task.seriesId) && (
+                        <span className="flex items-center gap-1">
+                          <Repeat className="size-3.5" aria-hidden /> {seriesRepeatLabel(seriesById.get(task.seriesId)!.days)} ·
+                        </span>
+                      )}
                       <span>
-                        Due {relativeDayPhrase(task.dueDate, today)} ·{' '}
+                        {task.seriesId ? 'Next' : 'Due'} {relativeDayPhrase(task.dueDate, today)} ·{' '}
                         {done > 0
                           ? `${formatDuration(done)} of ${formatDuration(task.estimateMinutes)}`
                           : formatDuration(task.estimateMinutes)}

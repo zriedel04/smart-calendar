@@ -1,5 +1,5 @@
 import type { CalendarEvent, DateOverrides, WeeklyHours } from '../lib/availability';
-import type { ISODate } from '../lib/dates';
+import type { ISODate, Weekday } from '../lib/dates';
 import type { Minutes, TimeRange } from '../lib/time';
 
 export interface Task {
@@ -16,6 +16,30 @@ export interface Task {
   sourceId?: string;
   /** Set when you push a task off your list: no work on it is planned before this date. */
   notBefore?: ISODate;
+  /** The repeating task this is one day's copy of. */
+  seriesId?: string;
+}
+
+/**
+ * A task that repeats, such as "Study 1h every weekday". Each day it lands on gets its own
+ * copy in `tasks`, made a week ahead, so ticking, logging and pushing work as for any task.
+ */
+export interface TaskSeries {
+  id: string;
+  title: string;
+  estimateMinutes: Minutes;
+  notes?: string;
+  /** The days of the week it repeats on. */
+  days: Weekday[];
+  /** The first day it can land on. */
+  startDate: ISODate;
+  /** The last day it can land on, if it stops. */
+  until?: ISODate;
+  createdAt: string;
+  /** Copies have been made up to this date, so a copy you delete doesn't come back. */
+  filledThrough?: ISODate;
+  /** Upcoming days you skipped, so remaking copies after an edit doesn't bring them back. */
+  skipped?: ISODate[];
 }
 
 /** Time you spent on a task on a given day. Ticking an item on the Today list creates one. */
@@ -33,6 +57,8 @@ export interface AppData {
   weeklyHours: WeeklyHours;
   overrides: DateOverrides;
   events: CalendarEvent[];
+  /** Repeating tasks. Missing in data saved before they existed. */
+  series?: TaskSeries[];
 }
 
 export type { CalendarEvent, ISODate, Minutes, TimeRange };

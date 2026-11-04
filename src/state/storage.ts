@@ -92,7 +92,8 @@ export function parseAppData(json: string): AppData {
           typeof t.estimateMinutes === 'number' &&
           t.estimateMinutes > 0 &&
           typeof t.createdAt === 'string' &&
-          (t.notBefore === undefined || isISODate(t.notBefore)),
+          (t.notBefore === undefined || isISODate(t.notBefore)) &&
+          (t.seriesId === undefined || typeof t.seriesId === 'string'),
       )
     : [];
 
@@ -138,5 +139,24 @@ export function parseAppData(json: string): AppData {
       )
     : [];
 
-  return { version: 1, tasks, logs, weeklyHours, overrides, events };
+  const series = Array.isArray(value.series)
+    ? value.series.filter(
+        (s): s is NonNullable<AppData['series']>[number] =>
+          isRecord(s) &&
+          typeof s.id === 'string' &&
+          typeof s.title === 'string' &&
+          typeof s.estimateMinutes === 'number' &&
+          s.estimateMinutes > 0 &&
+          Array.isArray(s.days) &&
+          s.days.length > 0 &&
+          s.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6) &&
+          isISODate(s.startDate) &&
+          (s.until === undefined || isISODate(s.until)) &&
+          (s.filledThrough === undefined || isISODate(s.filledThrough)) &&
+          (s.skipped === undefined || (Array.isArray(s.skipped) && s.skipped.every(isISODate))) &&
+          typeof s.createdAt === 'string',
+      )
+    : [];
+
+  return { version: 1, tasks, logs, weeklyHours, overrides, events, series };
 }
