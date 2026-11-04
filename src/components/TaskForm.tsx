@@ -46,6 +46,7 @@ export function TaskForm({
   const [notes, setNotes] = useState(source?.notes ?? '');
   const [repeat, setRepeat] = useState<RepeatChoice>(series ? choiceFor(series.days) : 'none');
   const [until, setUntil] = useState(series?.until ?? '');
+  const [planDate, setPlanDate] = useState(task?.planDate ?? '');
   const [submitted, setSubmitted] = useState(false);
   const repeats = repeat !== 'none';
 
@@ -55,8 +56,10 @@ export function TaskForm({
     dueDate: isISODate(dueDate) ? null : repeats ? 'Pick the first day.' : 'Pick a due date.',
     hours: Number.isFinite(estimateMinutes) && estimateMinutes >= 5 ? null : 'Enter at least 5 minutes (0.1 hours).',
     until: !repeats || !until || (isISODate(until) && until >= dueDate) ? null : 'Pick a day after the first one.',
+    planDate:
+      repeats || !planDate || (isISODate(planDate) && planDate <= dueDate) ? null : 'Pick a day by the due date.',
   };
-  const valid = !errors.title && !errors.dueDate && !errors.hours && !errors.until;
+  const valid = !errors.title && !errors.dueDate && !errors.hours && !errors.until && !errors.planDate;
 
   function repeatDays(): Weekday[] {
     if (repeat === 'daily') return EVERY_DAY;
@@ -84,7 +87,13 @@ export function TaskForm({
       if (series) dispatch({ type: 'series/update', id: series.id, draft, today });
       else dispatch({ type: 'series/add', draft, today, ...(task ? { replacesTaskId: task.id } : {}) });
     } else {
-      const draft = { title: title.trim(), dueDate, estimateMinutes, notes: notes.trim() || undefined };
+      const draft = {
+        title: title.trim(),
+        dueDate,
+        estimateMinutes,
+        notes: notes.trim() || undefined,
+        planDate: planDate || undefined,
+      };
       dispatch(task ? { type: 'task/update', id: task.id, draft } : { type: 'task/add', draft });
     }
     onClose();
@@ -213,14 +222,34 @@ export function TaskForm({
               </select>
             )}
           </Field>
-          {repeats && (
+          {repeats ? (
             <Field label="Last day (optional)" hint={error(errors.until)}>
               {(id) => (
                 <input id={id} type="date" className={inputClass} value={until} onChange={(e) => setUntil(e.target.value)} />
               )}
             </Field>
+          ) : (
+            <Field label="Work on it on (optional)" hint={error(errors.planDate)}>
+              {(id) => (
+                <input
+                  id={id}
+                  type="date"
+                  className={inputClass}
+                  value={planDate}
+                  min={today}
+                  max={isISODate(dueDate) ? dueDate : undefined}
+                  onChange={(e) => setPlanDate(e.target.value)}
+                />
+              )}
+            </Field>
           )}
         </div>
+
+        {!repeats && planDate && !errors.planDate && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            It goes first on that day's list. Anything that doesn't fit carries on to the next days.
+          </p>
+        )}
 
         {repeats && (
           <p className="text-sm text-slate-500 dark:text-slate-400">

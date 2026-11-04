@@ -45,6 +45,7 @@ export function planFor(data: AppData, today: ISODate): Plan {
       dueDate: task.dueDate,
       createdAt: task.createdAt,
       ...(task.notBefore ? { notBefore: task.notBefore } : {}),
+      ...(task.planDate && !task.seriesId ? { planDate: task.planDate } : {}),
       // A repeating task's copy is only ever worked on its own day.
       ...(task.seriesId ? { lastDate: task.dueDate } : {}),
       sizeMinutes: task.estimateMinutes,

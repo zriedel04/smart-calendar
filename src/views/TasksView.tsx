@@ -162,6 +162,9 @@ export function TasksView({
                       )}
                       <span>
                         {task.seriesId ? 'Next' : 'Due'} {relativeDayPhrase(task.dueDate, today)} ·{' '}
+                        {!task.seriesId && task.planDate && task.planDate >= today && (
+                          <>Working on it {relativeDayPhrase(task.planDate, today)} · </>
+                        )}
                         {done > 0
                           ? `${formatDuration(done)} of ${formatDuration(task.estimateMinutes)}`
                           : formatDuration(task.estimateMinutes)}

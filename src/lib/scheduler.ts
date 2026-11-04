@@ -29,6 +29,11 @@ export interface SchedulableTask {
   notBefore?: ISODate;
   /** No work is planned on the task after this date; whatever is left stays unscheduled. */
   lastDate?: ISODate;
+  /**
+   * The day you chose to work on it. Nothing is planned before it, and on that day it goes ahead
+   * of everything else. Whatever doesn't fit carries on to the next days like any other task.
+   */
+  planDate?: ISODate;
 }
 
 export interface PlanItem {
@@ -107,8 +112,12 @@ export function buildSchedule(input: ScheduleInput): Schedule {
     const capacity = Math.max(0, Math.floor(input.capacityOn(date)));
     let free = capacity;
     const items: PlanItem[] = [];
+    // Work that can only happen today goes first, then tasks you chose to work on today,
+    // then everything else in due-date order.
+    const rank = (q: (typeof queue)[number]) => (q.task.lastDate === date ? 0 : q.task.planDate === date ? 1 : 2);
+    const order = queue.some((q) => rank(q) < 2) ? queue.slice().sort((a, b) => rank(a) - rank(b)) : queue;
 
-    for (const entry of queue) {
+    for (const entry of order) {
       if (free <= 0) break;
       if (entry.left <= 0 || entry.expired) continue;
       if (entry.task.lastDate && date > entry.task.lastDate) {
@@ -118,6 +127,7 @@ export function buildSchedule(input: ScheduleInput): Schedule {
         continue;
       }
       if (entry.task.notBefore && date < entry.task.notBefore) continue;
+      if (entry.task.planDate && date < entry.task.planDate) continue;
 
       const slice = Math.min(entry.left, free);
       // A tiny slice of a big task isn't useful. Leave the gap for a smaller task that fits.

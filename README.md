@@ -40,6 +40,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Quick to set up, easy to fix mistakes.** Pick your usual hours with one tap on first launch. Ticked something off by accident, or deleted the wrong task? Hit Undo.
 - **Early warnings.** If a task can't be finished before it's due with your current hours, it's flagged as at risk.
 - **Suggested times.** Each item on Today's list shows when to work on it, like "1:30pm – 4:30pm", fitted around your classes and plans and starting from now. The Week view shows start times too. Turn them off with one tap.
+- **Pick the day.** Drag a task to another day in the Week view, or set "Work on it on" when you add it, and it goes first on that day's list. Whatever doesn't fit carries on to the next days.
 - **Log part of an item, or push it to tomorrow.** Did 1 hour of a 2-hour block? Log just that, and the rest stays on the list. Not getting to something today? Push it to tomorrow and today's time goes to the next task.
 - **Repeating tasks.** "Study Spanish, 1 hour every weekday" or "Laundry every Sunday": each day gets its own item, planned on that day, even a day off. Missed days are skipped instead of piling up.
 - **Unfinished work rolls over.** Anything you don't get to is rescheduled from the next day automatically.

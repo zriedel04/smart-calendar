@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyData, hasUserData } from './defaults';
+import { planFor } from './planner';
 import { reducer } from './reducer';
 import { parseAppData } from './storage';
 
@@ -29,6 +30,44 @@ describe('reducer', () => {
     expect(parseAppData(JSON.stringify(state)).tasks[0]?.notBefore).toBe('2026-11-04');
     state = reducer(state, { type: 'task/unpush', id });
     expect(state.tasks[0]).not.toHaveProperty('notBefore');
+  });
+
+  it('plans a task on a chosen day, clears it, and drops it when the task is pushed', () => {
+    let state = reducer(createEmptyData(), { type: 'task/add', draft });
+    const id = state.tasks[0]!.id;
+    state = reducer(state, { type: 'task/plan', id, date: '2026-11-05' });
+    expect(state.tasks[0]?.planDate).toBe('2026-11-05');
+    expect(parseAppData(JSON.stringify(state)).tasks[0]?.planDate).toBe('2026-11-05');
+    state = reducer(state, { type: 'task/plan', id, date: null });
+    expect(state.tasks[0]).not.toHaveProperty('planDate');
+    state = reducer(state, { type: 'task/plan', id, date: '2026-11-03' });
+    state = reducer(state, { type: 'task/push', id, until: '2026-11-04' });
+    expect(state.tasks[0]).not.toHaveProperty('planDate');
+    expect(state.tasks[0]?.notBefore).toBe('2026-11-04');
+  });
+
+  it('lets a chosen day replace a push, by dragging or from the form', () => {
+    let state = reducer(createEmptyData(), { type: 'task/add', draft });
+    const id = state.tasks[0]!.id;
+    state = reducer(state, { type: 'task/push', id, until: '2026-11-04' });
+    state = reducer(state, { type: 'task/plan', id, date: '2026-11-03' });
+    expect(state.tasks[0]).toMatchObject({ planDate: '2026-11-03' });
+    expect(state.tasks[0]).not.toHaveProperty('notBefore');
+    expect(planFor(state, '2026-11-03').dayPlan('2026-11-03').items.map((i) => i.taskId)).toEqual([id]);
+
+    state = reducer(state, { type: 'task/push', id, until: '2026-11-04' });
+    state = reducer(state, { type: 'task/update', id, draft: { ...draft, planDate: '2026-11-03' } });
+    expect(state.tasks[0]).not.toHaveProperty('notBefore');
+    state = reducer(state, { type: 'task/push', id, until: '2026-11-04' });
+    state = reducer(state, { type: 'task/update', id, draft: { ...draft, planDate: undefined } });
+    expect(state.tasks[0]?.notBefore).toBe('2026-11-04');
+  });
+
+  it("doesn't move a repeating task's copy off its own day", () => {
+    let state = reducer(createEmptyData(), { type: 'task/add', draft });
+    state = { ...state, tasks: state.tasks.map((t) => ({ ...t, seriesId: 's1' })) };
+    const id = state.tasks[0]!.id;
+    expect(reducer(state, { type: 'task/plan', id, date: '2026-11-05' }).tasks[0]).not.toHaveProperty('planDate');
   });
 
   it("undoes a day's ticked work for a task", () => {
