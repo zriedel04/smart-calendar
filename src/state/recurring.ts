@@ -18,6 +18,18 @@ export function seriesRepeatLabel(days: readonly Weekday[]): string {
   return `Every ${sorted.map((d) => WEEKDAY_NAMES[d].slice(0, 3)).join(', ')}`;
 }
 
+/** The next day a repeating task lands on that doesn't have its copy made yet, or null once it has ended. */
+export function nextSeriesDate(series: TaskSeries, today: ISODate): ISODate | null {
+  let d = series.filledThrough ? addDays(series.filledThrough, 1) : series.startDate;
+  if (d < series.startDate) d = series.startDate;
+  if (d < today) d = today;
+  for (let i = 0; i < 7; i++, d = addDays(d, 1)) {
+    if (series.until && d > series.until) return null;
+    if (series.days.includes(weekdayOf(d))) return d;
+  }
+  return null;
+}
+
 function copyOf(series: TaskSeries, date: ISODate, createdAt: string): Task {
   return {
     id: createId(),
@@ -50,6 +62,7 @@ export function fillSeries(data: AppData, today: ISODate): AppData {
   const existing = new Set(data.tasks.filter((t) => t.seriesId).map((t) => `${t.seriesId}/${t.dueDate}`));
   const series = allSeries.map((s) => {
     let from = s.filledThrough ? addDays(s.filledThrough, 1) : s.startDate;
+    if (from < s.startDate) from = s.startDate;
     if (from < today) from = today;
     const to = s.until && s.until < lastDay ? s.until : lastDay;
     if (from > to) return s;

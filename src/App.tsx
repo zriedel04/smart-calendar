@@ -12,7 +12,7 @@ import type { ISODate } from './lib/dates';
 import { useStore } from './state/context';
 import { createSampleData, hasUserData } from './state/defaults';
 import { planFor } from './state/planner';
-import type { Task } from './state/types';
+import type { Task, TaskSeries } from './state/types';
 import { useToday } from './state/useToday';
 import { MonthView } from './views/MonthView';
 import { ScheduleView } from './views/ScheduleView';
@@ -31,7 +31,7 @@ const TABS: { id: Tab; label: string; icon: ComponentType<{ className?: string }
 ];
 
 type Dialog =
-  | { kind: 'task'; task?: Task }
+  | { kind: 'task'; task?: Task; series?: TaskSeries }
   | { kind: 'bulk' }
   | { kind: 'day'; date?: ISODate }
   | { kind: 'event'; event?: CalendarEvent; date?: ISODate }
@@ -71,6 +71,7 @@ export default function App() {
   const addTask = () => setDialog({ kind: 'task' });
   const addMany = () => setDialog({ kind: 'bulk' });
   const editTask = (task: Task) => setDialog({ kind: 'task', task });
+  const editSeries = (series: TaskSeries) => setDialog({ kind: 'task', series });
   const editDay = (date?: ISODate) => setDialog({ kind: 'day', date });
   const editEvent = (event?: CalendarEvent) => setDialog({ kind: 'event', event });
   const addEventOn = (date: ISODate) => setDialog({ kind: 'event', date });
@@ -139,7 +140,7 @@ export default function App() {
           <MonthView plan={plan} onEditTask={editTask} onEditDay={editDay} onEditEvent={editEvent} onAddEvent={addEventOn} />
         )}
         {tab === 'tasks' && (
-          <TasksView plan={plan} onAddTask={addTask} onAddMany={addMany} onImport={importCalendar} onEditTask={editTask} />
+          <TasksView plan={plan} onAddTask={addTask} onAddMany={addMany} onImport={importCalendar} onEditTask={editTask} onEditSeries={editSeries} />
         )}
         {tab === 'schedule' && (
           <ScheduleView
@@ -153,7 +154,7 @@ export default function App() {
       </main>
 
 
-      {dialog?.kind === 'task' && <TaskForm task={dialog.task} today={today} onClose={close} onAddMany={addMany} />}
+      {dialog?.kind === 'task' && <TaskForm task={dialog.task} series={dialog.series} today={today} onClose={close} onAddMany={addMany} />}
       {dialog?.kind === 'bulk' && <BulkTaskForm today={today} onClose={close} />}
       {dialog?.kind === 'day' && <DayHoursDialog date={dialog.date} today={today} onClose={close} />}
       {dialog?.kind === 'event' && (

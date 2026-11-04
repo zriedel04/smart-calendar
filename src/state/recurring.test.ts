@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyData } from './defaults';
-import { fillSeries, seriesRepeatLabel, WEEKDAYS } from './recurring';
+import { fillSeries, nextSeriesDate, seriesRepeatLabel, WEEKDAYS } from './recurring';
 import { reducer, type SeriesDraft } from './reducer';
 import { parseAppData } from './storage';
 import type { AppData } from './types';
@@ -50,6 +50,21 @@ describe('repeating tasks', () => {
       ['2026-11-02', 'Study'],
       ['2026-11-04', 'Review notes'],
     ]);
+  });
+
+  it('makes no copies before a first day moved later', () => {
+    let data = add();
+    const id = data.series![0]!.id;
+    data = reducer(data, { type: 'series/update', id, draft: { ...study, startDate: '2026-11-05' }, today: MONDAY });
+    expect(dates(data)).toEqual(['2026-11-05', '2026-11-06']);
+  });
+
+  it('finds the next day without a copy yet', () => {
+    const later = add({ ...study, startDate: '2026-12-01' });
+    expect(later.tasks).toEqual([]);
+    expect(nextSeriesDate(later.series![0]!, MONDAY)).toBe('2026-12-01');
+    expect(nextSeriesDate(add().series![0]!, MONDAY)).toBe('2026-11-09');
+    expect(nextSeriesDate(add({ ...study, until: '2026-11-06' }).series![0]!, MONDAY)).toBeNull();
   });
 
   it('stops repeating, removing upcoming days you have not started', () => {

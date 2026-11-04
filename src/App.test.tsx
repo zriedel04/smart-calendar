@@ -117,6 +117,34 @@ describe('App', () => {
     expect(screen.queryByText('Study Spanish')).not.toBeInTheDocument();
   });
 
+  it('keeps logged time when a task becomes repeating, and lists a repeating task with nothing to do yet', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Piano practice');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '1');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Mark "Piano practice" done' }));
+    expect(screen.getByText('1h of 1h done')).toBeInTheDocument();
+
+    // Make it repeat on Saturdays, starting next month: today's logged hour stays.
+    await user.click(within(todaysList()).getByText('Piano practice'));
+    dialog = screen.getByRole('dialog', { name: 'Edit task' });
+    fireEvent.change(within(dialog).getByLabelText('Due date'), { target: { value: '2026-12-05' } });
+    await user.selectOptions(within(dialog).getByLabelText('Repeats'), 'Every Saturday');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(screen.getByText('1h of 1h done')).toBeInTheDocument();
+
+    // It has no copies yet, but the Tasks tab still shows it and can stop it.
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByText(/Every Saturday · Next Sat, Dec 5/)).toBeInTheDocument();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: /Piano practice.*Every Saturday/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Edit repeating task' })).getByRole('button', { name: 'Stop repeating' }));
+    expect(screen.queryByText(/Every Saturday/)).not.toBeInTheDocument();
+  });
+
   it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
     const user = userEvent.setup();
     const { container } = renderApp();

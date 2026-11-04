@@ -7,8 +7,8 @@ import { cx } from '../components/cx';
 import { Button, Card, EmptyState, PriorityBadge, ProgressBar } from '../components/ui';
 import { useStore } from '../state/context';
 import { isTaskComplete, type Plan } from '../state/planner';
-import { seriesRepeatLabel } from '../state/recurring';
-import type { Task } from '../state/types';
+import { nextSeriesDate, seriesRepeatLabel } from '../state/recurring';
+import type { Task, TaskSeries } from '../state/types';
 
 const GROUP_DESCRIPTIONS: Record<Priority, string> = {
   overdue: 'Past their due date',
@@ -30,12 +30,14 @@ export function TasksView({
   onAddMany,
   onImport,
   onEditTask,
+  onEditSeries,
 }: {
   plan: Plan;
   onAddTask: () => void;
   onAddMany: () => void;
   onImport: () => void;
   onEditTask: (task: Task) => void;
+  onEditSeries: (series: TaskSeries) => void;
 }) {
   const { data, dispatch } = useStore();
   const { today } = plan;
@@ -49,6 +51,9 @@ export function TasksView({
     if (!current || t.dueDate < current.dueDate) nextCopy.set(t.seriesId, t);
   }
   const seriesById = new Map((data.series ?? []).map((s) => [s.id, s]));
+  // Repeating tasks with no open copy right now, such as one that starts next month or a day you
+  // just skipped, still show here so you can change or stop them.
+  const waiting = (data.series ?? []).filter((s) => !nextCopy.has(s.id));
 
   const open = data.tasks
     .filter((t) => !isTaskComplete(t, logged(t)) && (!t.seriesId || nextCopy.get(t.seriesId) === t))
@@ -86,7 +91,31 @@ export function TasksView({
         </div>
       </div>
 
-      {open.length === 0 && (
+      {waiting.length > 0 && (
+        <Card className="p-2 sm:p-3">
+          <div className="flex items-center gap-2 px-2 pt-1 pb-2 text-sm text-slate-500 dark:text-slate-400">
+            <Repeat className="size-4" aria-hidden /> Repeating, nothing to do yet
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {waiting.map((s) => {
+              const next = nextSeriesDate(s, today);
+              return (
+                <li key={s.id}>
+                  <button type="button" onClick={() => onEditSeries(s)} className="w-full px-2 py-3 text-left">
+                    <p className="truncate font-medium text-slate-900 dark:text-white">{s.title}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {seriesRepeatLabel(s.days)} · {next ? `Next ${relativeDayPhrase(next, today)}` : 'Ended'} ·{' '}
+                      {formatDuration(s.estimateMinutes)}
+                    </p>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {open.length === 0 && waiting.length === 0 && (
         <Card>
           <EmptyState
             icon={<ListTodo className="size-6" />}

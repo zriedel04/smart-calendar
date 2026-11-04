@@ -22,11 +22,14 @@ function choiceFor(days: readonly Weekday[]): RepeatChoice {
 
 export function TaskForm({
   task,
+  series: seriesToEdit,
   today,
   onClose,
   onAddMany,
 }: {
   task?: Task;
+  /** A repeating task to edit when there's no day's copy of it to open. */
+  series?: TaskSeries;
   today: ISODate;
   onClose: () => void;
   /** Switches to adding several tasks at once. Only offered when adding a new task. */
@@ -34,7 +37,8 @@ export function TaskForm({
 }) {
   const { data, dispatch } = useStore();
   // Editing one day's copy of a repeating task edits the repeating task itself.
-  const series: TaskSeries | undefined = task?.seriesId ? data.series?.find((s) => s.id === task.seriesId) : undefined;
+  const series: TaskSeries | undefined =
+    seriesToEdit ?? (task?.seriesId ? data.series?.find((s) => s.id === task.seriesId) : undefined);
   const source = series ?? task;
   const [title, setTitle] = useState(source?.title ?? '');
   const [dueDate, setDueDate] = useState(series?.startDate ?? task?.dueDate ?? addDays(today, 7));
@@ -80,8 +84,10 @@ export function TaskForm({
       if (series) dispatch({ type: 'series/update', id: series.id, draft, today });
       else {
         dispatch({ type: 'series/add', draft, today });
-        // A one-off task you turned into a repeating one is replaced by its copies.
-        if (task) dispatch({ type: 'task/delete', id: task.id });
+        // A one-off task you turned into a repeating one is replaced by its copies. If you logged
+        // time on it, it's kept as finished so that time isn't lost.
+        if (task && logged > 0) dispatch({ type: 'task/setComplete', id: task.id, complete: true });
+        else if (task) dispatch({ type: 'task/delete', id: task.id });
       }
     } else {
       const draft = { title: title.trim(), dueDate, estimateMinutes, notes: notes.trim() || undefined };
