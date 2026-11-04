@@ -189,14 +189,20 @@ function fitCopiesToSeries(base: AppData, data: AppData) {
   data.tasks = tasks;
 }
 
-/** Calendar links, merged like other items. Items you deleted from a link stay deleted whichever device you deleted them on. */
+/**
+ * Calendar links, merged like other items. Deleted items are merged one by one against the base: an
+ * item deleted on either device stays deleted, and one brought back with Undo stays back.
+ */
 function mergeFeeds(base: AppData, local: AppData, remote: AppData) {
-  const dismissedOn = (d: AppData) => new Map((d.feeds ?? []).map((f) => [f.id, f.dismissed ?? []]));
-  const l = dismissedOn(local);
-  const r = dismissedOn(remote);
+  const dismissedOn = (d: AppData) => new Map((d.feeds ?? []).map((f) => [f.id, new Set(f.dismissed ?? [])]));
+  const [b, l, r] = [dismissedOn(base), dismissedOn(local), dismissedOn(remote)];
   const withoutDismissed = (d: AppData) => (d.feeds ?? []).map(({ dismissed: _d, ...f }) => f);
   return mergeById(withoutDismissed(base), withoutDismissed(local), withoutDismissed(remote)).map((f) => {
-    const dismissed = [...new Set([...(l.get(f.id) ?? []), ...(r.get(f.id) ?? [])])];
+    const [bs, ls, rs] = [b.get(f.id), l.get(f.id), r.get(f.id)];
+    const keys = new Set([...(bs ?? []), ...(ls ?? []), ...(rs ?? [])]);
+    const dismissed = [...keys].filter((k) =>
+      pick(bs?.has(k) ?? false, ls?.has(k) ?? rs?.has(k) ?? false, rs?.has(k) ?? ls?.has(k) ?? false),
+    );
     return dismissed.length ? { ...f, dismissed } : f;
   });
 }

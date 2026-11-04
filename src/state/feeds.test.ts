@@ -90,6 +90,26 @@ describe('calendar links', () => {
     expect(data.tasks).toEqual([]);
   });
 
+  it("doesn't bring back an event you moved to another day and then deleted", () => {
+    const party: IcsEntry = { ...lecture('p1', '2026-11-06'), title: 'Party', repeat: 'none', until: undefined };
+    let data = apply(withFeed(), [party]);
+    const id = data.events[0]!.id;
+    const { id: _id, ...draft } = data.events[0]!;
+    data = reducer(data, { type: 'event/update', id, draft: { ...draft, date: '2026-11-07' } });
+    data = reducer(data, { type: 'event/delete', id });
+    expect(apply(data, [party]).events).toEqual([]);
+  });
+
+  it('keeps an item brought back with Undo after its deletion synced', () => {
+    const base = apply(withFeed(), [assignment('a1', 'Quiz 1', '2026-11-05')]);
+    const deleted = reducer(base, { type: 'task/delete', id: feedItemId('f1', 'a1') });
+    // The deletion synced, then Undo brought the task back here while another device changed something else.
+    const remote = reducer(deleted, { type: 'hours/setOverride', date: '2026-11-03', ranges: [] });
+    const merged = mergeAppData(deleted, base, remote);
+    expect(merged.tasks.map((t) => t.id)).toEqual([feedItemId('f1', 'a1')]);
+    expect(merged.feeds![0]!.dismissed).toBeUndefined();
+  });
+
   it('takes over entries imported earlier from a file of the same calendar', () => {
     let data = withFeed();
     data = reducer(data, { type: 'import/add', tasks: [{ title: 'Essay 2', dueDate: '2026-11-06', estimateMinutes: 120, sourceId: 'a1' }], events: [] });

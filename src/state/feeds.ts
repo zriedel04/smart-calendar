@@ -14,9 +14,12 @@ export const FEED_REFRESH_MS = 3 * 60 * 60 * 1000;
 export const feedItemId = (feedId: string, uid: string, part?: number) =>
   `feed:${feedId}:${uid}${part === undefined ? '' : `:${part}`}`;
 
-/** What a deleted item from a link is remembered by, so refreshing doesn't bring it back. */
-export function dismissKey(item: Pick<Task, 'sourceId'> | Pick<CalendarEvent, 'sourceId' | 'date'>): string {
-  return 'date' in item ? `event:${item.sourceId}@${item.date}` : `task:${item.sourceId}`;
+/**
+ * What a deleted item from a link is remembered by, so refreshing doesn't bring it back: a task by
+ * its calendar entry, an event by its id, which stays the same however you edit it.
+ */
+export function dismissKey(item: Pick<Task, 'sourceId'> | Pick<CalendarEvent, 'id' | 'date'>): string {
+  return 'date' in item ? `event:${item.id}` : `task:${item.sourceId}`;
 }
 
 /** A readable name for a link, such as "Canvas" for a Canvas calendar feed. */
@@ -114,7 +117,10 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
         .filter((e) => !dismissed.has(dismissKey(e)));
     if (group.length > 0) {
       if (group.some((e) => !e.feedId)) {
-        events = events.map((e) => (group.includes(e) ? { ...e, feedId: feed.id, sourceStamp: stamp } : e));
+        // Events imported from a file get the link's ids, keeping any edits, so deleting one later is remembered.
+        const ordered = [...group].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
+        const ids = new Map(ordered.map((e, part) => [e, feedItemId(feed.id, uid, part)]));
+        events = events.map((e) => (ids.has(e) ? { ...e, id: ids.get(e)!, feedId: feed.id, sourceStamp: stamp } : e));
         changed = true;
       } else if (group.some((e) => e.sourceStamp !== stamp)) {
         events = [...events.filter((e) => !group.includes(e)), ...fresh()];
