@@ -1,3 +1,4 @@
+import { formatDate } from '../lib/dates';
 import { formatDuration } from '../lib/time';
 import type { StoreAction } from './context';
 import { reducer, type Action } from './reducer';
@@ -17,6 +18,10 @@ export function undoLabel(action: Action, before: AppData): string | null {
       return `Skipped "${task(action.id)}"`;
     case 'task/push':
       return `Pushed "${task(action.id)}" to tomorrow`;
+    case 'task/plan':
+      return action.date
+        ? `Moved "${task(action.id)}" to ${formatDate(action.date, { weekday: 'short', month: 'short', day: 'numeric' })}`
+        : null;
     case 'event/delete':
       return `Deleted "${before.events.find((e) => e.id === action.id)?.title ?? 'event'}"`;
     case 'series/stop':

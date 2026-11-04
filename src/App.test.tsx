@@ -197,6 +197,48 @@ describe('App', () => {
     expect(within(todaysList()).queryByText('2:30pm – 3:30pm ·')).not.toBeInTheDocument();
   });
 
+  it('plans a task on the day you choose, from the form or by dragging it in the week', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '2');
+    fireEvent.change(within(dialog).getByLabelText('Due date'), { target: { value: '2026-11-06' } });
+    fireEvent.change(within(dialog).getByLabelText('Work on it on (optional)'), { target: { value: '2026-11-07' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    expect(within(dialog).getByText('Pick a day by the due date.')).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Work on it on (optional)'), { target: { value: '2026-11-03' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    expect(within(todaysList()).queryByText('Essay')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Week' }));
+    const day = (n: number) => screen.getByText(String(n), { selector: 'p' }).closest('li')!;
+    expect(within(day(3)).getByText('Essay')).toBeInTheDocument();
+    expect(within(day(3)).getByLabelText('You chose this day')).toBeInTheDocument();
+
+    // Drag it to Thursday.
+    const dataTransfer = { setData: () => {}, effectAllowed: '', dropEffect: '' };
+    fireEvent.dragStart(within(day(3)).getByText('Essay').closest('li')!, { dataTransfer });
+    fireEvent.dragOver(day(5), { dataTransfer });
+    fireEvent.drop(day(5), { dataTransfer });
+    expect(within(day(3)).queryByText('Essay')).not.toBeInTheDocument();
+    expect(within(day(5)).getByText('Essay')).toBeInTheDocument();
+    expect(screen.getByText('Moved "Essay" to Thu, Nov 5')).toBeInTheDocument();
+
+    // Days past the due date don't take it.
+    fireEvent.dragStart(within(day(5)).getByText('Essay').closest('li')!, { dataTransfer });
+    fireEvent.drop(day(7), { dataTransfer });
+    expect(within(day(5)).getByText('Essay')).toBeInTheDocument();
+
+    // Clearing the day in the form puts it back in due-date order, which starts today.
+    await user.click(within(day(5)).getByText('Essay'));
+    dialog = screen.getByRole('dialog', { name: 'Edit task' });
+    fireEvent.change(within(dialog).getByLabelText('Work on it on (optional)'), { target: { value: '' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(within(day(2)).getByText('Essay')).toBeInTheDocument();
+  });
+
   it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
     const user = userEvent.setup();
     const { container } = renderApp();

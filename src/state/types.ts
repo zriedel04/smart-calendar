@@ -16,6 +16,8 @@ export interface Task {
   sourceId?: string;
   /** Set when you push a task off your list: no work on it is planned before this date. */
   notBefore?: ISODate;
+  /** The day you chose to work on it. Work goes on that day first instead of in due-date order. */
+  planDate?: ISODate;
   /** The repeating task this is one day's copy of. */
   seriesId?: string;
 }

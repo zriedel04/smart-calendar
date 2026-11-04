@@ -5,7 +5,7 @@ import { createId } from './ids';
 import { fillSeries } from './recurring';
 import type { AppData, Task, TaskSeries } from './types';
 
-export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes' | 'sourceId'>;
+export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes' | 'sourceId' | 'planDate'>;
 export type EventDraft = Omit<CalendarEvent, 'id'>;
 export type SeriesDraft = Pick<TaskSeries, 'title' | 'estimateMinutes' | 'notes' | 'days' | 'startDate' | 'until'>;
 
@@ -16,6 +16,7 @@ export type Action =
   | { type: 'task/setComplete'; id: string; complete: boolean }
   | { type: 'task/push'; id: string; until: ISODate }
   | { type: 'task/unpush'; id: string }
+  | { type: 'task/plan'; id: string; date: ISODate | null }
   | { type: 'task/skip'; id: string }
   | { type: 'work/log'; taskId: string; date: ISODate; minutes: number }
   | { type: 'work/undoDay'; taskId: string; date: ISODate }
@@ -73,7 +74,24 @@ export function reducer(state: AppData, action: Action): AppData {
         }),
       };
     case 'task/push':
-      return { ...state, tasks: state.tasks.map((t) => (t.id === action.id ? { ...t, notBefore: action.until } : t)) };
+      // Pushing replaces any day you chose for it, which would otherwise keep it on today's list.
+      return {
+        ...state,
+        tasks: state.tasks.map((t) => {
+          if (t.id !== action.id) return t;
+          const { planDate: _planDate, ...rest } = t;
+          return { ...rest, notBefore: action.until };
+        }),
+      };
+    case 'task/plan':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) => {
+          if (t.id !== action.id || t.seriesId) return t;
+          const { planDate: _planDate, ...rest } = t;
+          return action.date ? { ...rest, planDate: action.date } : rest;
+        }),
+      };
     case 'task/unpush':
       return {
         ...state,

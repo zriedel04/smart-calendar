@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pencil, Pin } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
@@ -23,7 +23,7 @@ export function WeekView({
   onEditDay: (date: ISODate) => void;
   onEditTask: (task: Task) => void;
 }) {
-  const { data } = useStore();
+  const { data, dispatch } = useStore();
   const { today } = plan;
   const thisWeek = startOfWeek(today);
   const [weekStart, setWeekStart] = useState(thisWeek);
@@ -31,6 +31,14 @@ export function WeekView({
   const [showTimes] = useShowTimes();
   const clock = useClockMinutes();
   const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Dragging a task onto a day plans it on that day.
+  const [dragging, setDragging] = useState<Task | null>(null);
+  const [dropTarget, setDropTarget] = useState<ISODate | null>(null);
+  const canDrop = (date: ISODate) => dragging !== null && date >= today && date <= dragging.dueDate;
+  const endDrag = () => {
+    setDragging(null);
+    setDropTarget(null);
+  };
 
   const heading =
     weekStart === thisWeek
@@ -47,6 +55,7 @@ export function WeekView({
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {formatDate(dates[0]!, { month: 'short', day: 'numeric' })} –{' '}
             {formatDate(dates[6]!, { month: 'short', day: 'numeric' })}
+            <span className="hidden sm:inline"> · Drag a task to the day you want to work on it</span>
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -93,11 +102,28 @@ export function WeekView({
           return (
             <li
               key={date}
+              onDragOver={(e) => {
+                if (!canDrop(date)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dropTarget !== date) setDropTarget(date);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null) && dropTarget === date) setDropTarget(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragging && canDrop(date)) dispatch({ type: 'task/plan', id: dragging.id, date });
+                endDrag();
+              }}
               className={cx(
-                'rounded-2xl border bg-white p-4 shadow-sm dark:bg-slate-900',
-                isToday
-                  ? 'border-indigo-300 ring-1 ring-indigo-300 dark:border-indigo-500/60 dark:ring-indigo-500/60'
-                  : 'border-slate-200 dark:border-slate-800',
+                'rounded-2xl border p-4 shadow-sm',
+                dropTarget === date ? 'bg-indigo-50 dark:bg-indigo-950' : 'bg-white dark:bg-slate-900',
+                dropTarget === date
+                  ? 'border-indigo-400 ring-2 ring-indigo-400'
+                  : isToday
+                    ? 'border-indigo-300 ring-1 ring-indigo-300 dark:border-indigo-500/60 dark:ring-indigo-500/60'
+                    : 'border-slate-200 dark:border-slate-800',
                 isPast && 'opacity-70',
               )}
             >
@@ -185,7 +211,17 @@ export function WeekView({
                         const task = tasksById.get(item.taskId);
                         if (!task) return null;
                         return (
-                          <li key={`plan-${item.taskId}`}>
+                          <li
+                            key={`plan-${item.taskId}`}
+                            draggable={!task.seriesId}
+                            onDragStart={(e) => {
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('text/plain', task.title);
+                              setDragging(task);
+                            }}
+                            onDragEnd={endDrag}
+                            className={cx(!task.seriesId && 'cursor-grab active:cursor-grabbing', dragging?.id === task.id && 'opacity-40')}
+                          >
                             <button
                               type="button"
                               onClick={() => onEditTask(task)}
@@ -200,6 +236,9 @@ export function WeekView({
                                 </span>
                               )}
                               <span className="min-w-0 flex-1 truncate">{task.title}</span>
+                              {task.planDate === date && (
+                                <Pin className="size-3.5 shrink-0 text-indigo-500" aria-label="You chose this day" />
+                              )}
                               <span className="tabular-nums text-slate-500 dark:text-slate-400">
                                 {formatDuration(item.minutes)}
                               </span>

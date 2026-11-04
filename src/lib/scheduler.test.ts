@@ -23,6 +23,41 @@ function summarize(schedule: ReturnType<typeof buildSchedule>): Record<ISODate, 
 }
 
 describe('buildSchedule', () => {
+  it('puts a task first on the day you chose, never before it, and carries the rest on', () => {
+    const thursday = addDays(TODAY, 2);
+    const schedule = buildSchedule({
+      today: TODAY,
+      tasks: [{ ...task('essay', 6, 4), planDate: thursday }, task('lab', 3, 5)],
+      capacityOn: every(h(3)),
+    });
+    expect(summarize(schedule)).toEqual({
+      [TODAY]: ['lab:180'],
+      [addDays(TODAY, 1)]: ['lab:120'],
+      [thursday]: ['essay:180'],
+      [addDays(TODAY, 3)]: ['essay:60'],
+    });
+    expect(schedule.forecasts.get('essay')).toMatchObject({ finishDate: addDays(TODAY, 3), atRisk: false });
+  });
+
+  it("keeps work that can only happen on a day ahead of a task you chose for that day", () => {
+    const schedule = buildSchedule({
+      today: TODAY,
+      tasks: [{ ...task('big', 6, 6), planDate: TODAY }, { ...task('flashcards', 0, 0.5), lastDate: TODAY }],
+      capacityOn: every(h(3)),
+    });
+    expect(summarize(schedule)[TODAY]).toEqual(['flashcards:30', 'big:150']);
+  });
+
+  it('plans a chosen day ahead of work due sooner, even if that puts the other task at risk', () => {
+    const schedule = buildSchedule({
+      today: TODAY,
+      tasks: [task('lab', 0, 2), { ...task('essay', 5, 2), planDate: TODAY }],
+      capacityOn: every(h(3)),
+    });
+    expect(summarize(schedule)[TODAY]).toEqual(['essay:120', 'lab:60']);
+    expect(schedule.forecasts.get('lab')).toMatchObject({ atRisk: true });
+  });
+
   it('plans no work on a task after its lastDate and leaves the rest unscheduled', () => {
     const schedule = buildSchedule({
       today: TODAY,

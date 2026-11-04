@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Plus, Repeat, SkipForward, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Pin, Plus, Repeat, SkipForward, Sparkles } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
@@ -207,6 +207,9 @@ export function TodayView({
                     <>
                       {showTimes && <SuggestedTime ranges={times.get(task.id)} />}
                       {task.seriesId && <Repeat className="mr-1 inline size-3.5 align-[-2px]" aria-label="Repeats" />}
+                      {task.planDate === today && (
+                        <Pin className="mr-1 inline size-3.5 align-[-2px] text-indigo-500" aria-label="You chose today" />
+                      )}
                       {formatDuration(item.minutes)}
                       {task.seriesId ? '' : ` · due ${relativeDayPhrase(task.dueDate, today)}`}
 

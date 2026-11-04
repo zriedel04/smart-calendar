@@ -93,6 +93,7 @@ export function parseAppData(json: string): AppData {
           t.estimateMinutes > 0 &&
           typeof t.createdAt === 'string' &&
           (t.notBefore === undefined || isISODate(t.notBefore)) &&
+          (t.planDate === undefined || isISODate(t.planDate)) &&
           (t.seriesId === undefined || typeof t.seriesId === 'string'),
       )
     : [];
