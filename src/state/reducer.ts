@@ -27,7 +27,7 @@ export type Action =
   | { type: 'event/update'; id: string; draft: EventDraft }
   | { type: 'event/delete'; id: string }
   | { type: 'import/add'; tasks: TaskDraft[]; events: EventDraft[] }
-  | { type: 'series/add'; draft: SeriesDraft; today: ISODate }
+  | { type: 'series/add'; draft: SeriesDraft; today: ISODate; replacesTaskId?: string }
   | { type: 'series/update'; id: string; draft: SeriesDraft; today: ISODate }
   | { type: 'series/stop'; id: string; today: ISODate }
   | { type: 'series/fill'; today: ISODate }
@@ -151,8 +151,19 @@ export function reducer(state: AppData, action: Action): AppData {
       };
     }
     case 'series/add': {
-      const series: TaskSeries = { ...action.draft, id: createId(), createdAt: new Date().toISOString() };
-      return fillSeries({ ...state, series: [...(state.series ?? []), series] }, action.today);
+      const createdAt = new Date().toISOString();
+      const series: TaskSeries = { ...action.draft, id: createId(), createdAt };
+      let { tasks, logs } = state;
+      // A one-off task turned into a repeating one is replaced by its copies, in the same step so a
+      // single Undo can't leave both. If you logged time on it, it's kept as finished instead.
+      const replaced = action.replacesTaskId;
+      if (replaced && logs.some((l) => l.taskId === replaced)) {
+        tasks = tasks.map((t) => (t.id === replaced ? { ...t, completedAt: createdAt } : t));
+      } else if (replaced) {
+        tasks = tasks.filter((t) => t.id !== replaced);
+        logs = logs.filter((l) => l.taskId !== replaced);
+      }
+      return fillSeries({ ...state, tasks, logs, series: [...(state.series ?? []), series] }, action.today);
     }
     case 'series/update': {
       // Upcoming copies are made again from the new details; ones you started keep theirs.

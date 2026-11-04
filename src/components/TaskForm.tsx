@@ -82,13 +82,7 @@ export function TaskForm({
         ...(until ? { until } : {}),
       };
       if (series) dispatch({ type: 'series/update', id: series.id, draft, today });
-      else {
-        dispatch({ type: 'series/add', draft, today });
-        // A one-off task you turned into a repeating one is replaced by its copies. If you logged
-        // time on it, it's kept as finished so that time isn't lost.
-        if (task && logged > 0) dispatch({ type: 'task/setComplete', id: task.id, complete: true });
-        else if (task) dispatch({ type: 'task/delete', id: task.id });
-      }
+      else dispatch({ type: 'series/add', draft, today, ...(task ? { replacesTaskId: task.id } : {}) });
     } else {
       const draft = { title: title.trim(), dueDate, estimateMinutes, notes: notes.trim() || undefined };
       dispatch(task ? { type: 'task/update', id: task.id, draft } : { type: 'task/add', draft });
