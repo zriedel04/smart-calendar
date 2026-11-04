@@ -8,6 +8,7 @@ import { StoreProvider } from '../state/StoreProvider';
 import type { SyncBackend, SyncUser } from './backend';
 import type { SyncState } from './engine';
 import { memoryStore } from './memoryStore';
+import { errorMessage } from './errors';
 import { SyncProvider } from './SyncProvider';
 
 function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser | null = null) {
@@ -143,5 +144,15 @@ describe('Sync across devices', () => {
     await user.click(within(dialog).getByRole('button', { name: "Keep this device's" }));
     await waitFor(() => expect(cloud.row!.version).toBe(2));
     expect(taskTitles(cloud.row!.data)).toContain('Reply to internship recruiter');
+  });
+});
+
+describe('errorMessage', () => {
+  it("shows Supabase's own message for the plain error objects it returns", () => {
+    expect(errorMessage({ message: 'permission denied for table calendar_data', code: '42501' })).toBe(
+      'permission denied for table calendar_data (42501)',
+    );
+    expect(errorMessage(new Error('Failed to fetch'))).toBe('Failed to fetch');
+    expect(errorMessage(undefined)).toBe("Couldn't reach your account.");
   });
 });

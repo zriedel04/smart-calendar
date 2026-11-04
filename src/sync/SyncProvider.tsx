@@ -4,6 +4,7 @@ import type { AppData } from '../state/types';
 import type { SyncBackend, SyncUser } from './backend';
 import { SyncContext, type SyncStatus, type SyncValue } from './context';
 import { syncCalendar, type FirstSyncChoice, type RemoteCalendar, type SyncState } from './engine';
+import { errorMessage } from './errors';
 import { mergeAppData, sameData } from './merge';
 
 /** How long to wait after a change before saving it to the account, so a burst of edits is one save. */
@@ -73,7 +74,7 @@ export function SyncProvider({
       } catch (e) {
         const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
         setStatus(offline ? 'offline' : 'error');
-        setError(offline ? null : e instanceof Error ? e.message : "Couldn't sync.");
+        setError(offline ? null : errorMessage(e));
         return false;
       }
     },
