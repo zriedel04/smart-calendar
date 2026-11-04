@@ -45,7 +45,8 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Log part of an item, or push it to tomorrow.** Did 1 hour of a 2-hour block? Log just that, and the rest stays on the list. Not getting to something today? Push it to tomorrow and today's time goes to the next task.
 - **Repeating tasks.** "Study Spanish, 1 hour every weekday" or "Laundry every Sunday": each day gets its own item, planned on that day, even a day off. Missed days are skipped instead of piling up.
 - **Unfinished work rolls over.** Anything you don't get to is rescheduled from the next day automatically.
-- **Works offline and installs like an app.** It's a PWA, so you can add it to your phone's home screen. Data stays in your browser, with JSON export and import for backups.
+- **Sync across devices, if you want it.** Sign in with an emailed link and your phone and laptop share one calendar. Changes made offline on two devices are merged item by item, so nothing is lost. No account needed to use the app.
+- **Works offline and installs like an app.** It's a PWA, so you can add it to your phone's home screen. Without an account, data stays in your browser, with JSON export and import for backups.
 - **Light and dark mode**, following your system setting.
 
 ## How the scheduler works
@@ -61,11 +62,23 @@ Filling every day completely is what pulls future work forward. Doing work in du
 
 Because the plan is recomputed from your tasks, your hours and your logged work every time something changes, there's no stored schedule to get out of sync.
 
+## How sync works
+
+Signed in, the whole calendar is one row in a Supabase Postgres table ([`supabase/schema.sql`](supabase/schema.sql)), protected by row-level security so each account can only reach its own row.
+
+- **Every save is checked against a version number**, so a device can't overwrite a save it hasn't seen. If another device saved first, the app fetches that save, merges, and tries again.
+- **Merging is three-way** ([`src/sync/merge.ts`](src/sync/merge.ts)). Each device remembers the version it last agreed on with the account. Comparing both sides with it tells a deletion apart from an addition, so a task deleted on the phone stays deleted, and tasks added on each device are both kept. If the same task was edited on both, this device's edit wins.
+- **Changes reach other open devices right away** through Supabase Realtime, and the app also catches up when you come back to it or reconnect.
+- **The first time a device that already has data signs in** to an account that has a different calendar, it asks which one to keep.
+
+The sync logic ([`src/sync/engine.ts`](src/sync/engine.ts)) talks to a small storage interface, so the tests run it against an in-memory store, including two devices saving at the same moment.
+
 ## Tech stack
 
 - [React 19](https://react.dev) and [TypeScript](https://www.typescriptlang.org)
 - [Vite](https://vite.dev) for builds, with [vite-plugin-pwa](https://vite-pwa-org.netlify.app) for offline support and install
 - [Tailwind CSS 4](https://tailwindcss.com) for styling and [Lucide](https://lucide.dev) icons
+- [Supabase](https://supabase.com) for optional accounts (email sign-in links), a Postgres table with row-level security, and Realtime updates
 - [Vitest](https://vitest.dev) and [Testing Library](https://testing-library.com) for tests, [Oxlint](https://oxc.rs) for linting
 - GitHub Actions for CI and deployment to GitHub Pages
 
@@ -75,6 +88,7 @@ Because the plan is recomputed from your tasks, your hours and your logged work 
 src/
   lib/          Pure logic: dates, time ranges, availability, priorities, the scheduler, the .ics parser
   state/        App data types, reducer, local storage, and planFor() which connects data to the scheduler
+  sync/         Accounts and sync: the three-way merge, the sync engine, and the Supabase connection
   components/   Shared UI: buttons, cards, modals, task / event / hours forms
   views/        The screens: Today, Week, Month, Tasks, Schedule
   App.tsx       Layout, navigation and dialogs
@@ -110,9 +124,14 @@ Every push to `main` runs the tests and deploys to GitHub Pages through [`.githu
 
 To deploy your own copy, enable GitHub Pages under **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
+To use your own Supabase project for accounts:
+
+1. Create a project, then run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor.
+2. Under **Authentication → URL Configuration**, set the Site URL to your deployed app and add it (and `http://localhost:5173/**`) to the Redirect URLs.
+3. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set to your project's URL and publishable key.
+
 ## Roadmap
 
-- Accounts and cloud sync so your phone and laptop share the same data
 - Live sync with a Canvas or Google Calendar feed link
 - Importing assignments from a screenshot
 

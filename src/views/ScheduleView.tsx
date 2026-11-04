@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { eventBlocksWork, type CalendarEvent } from '../lib/availability';
 import { formatDate, WEEKDAY_NAMES, WEEKDAYS_MONDAY_FIRST, weekdayOf, type ISODate } from '../lib/dates';
 import { formatDuration, formatRange, normalizeRanges, totalMinutes } from '../lib/time';
+import { AccountCard } from '../components/AccountCard';
 import { HoursEditor } from '../components/HoursEditor';
 import { eventRepeatLabel, eventTime } from '../components/eventStyles';
 import { Button, Card, CardHeader, EventIcon } from '../components/ui';
@@ -182,10 +183,12 @@ export function ScheduleView({
         )}
       </Card>
 
+      <AccountCard />
+
       <Card>
         <CardHeader
           title="Your data"
-          description="Everything is saved in this browser. Export a backup to move it to another device."
+          description="Your calendar is saved in this browser. Export a backup to keep a copy as a file."
         />
         <div className="flex flex-wrap gap-2">
           <Button onClick={exportData}>

@@ -5,6 +5,7 @@ import { DayHoursDialog } from './components/DayHoursDialog';
 import { EventForm } from './components/EventForm';
 import { ImportCalendarDialog } from './components/ImportCalendarDialog';
 import { TaskForm } from './components/TaskForm';
+import { SyncConflictDialog } from './components/SyncConflictDialog';
 import { TimerBar } from './components/TimerBar';
 import { UndoToast } from './components/UndoToast';
 import { cx } from './components/cx';
@@ -165,6 +166,7 @@ export default function App() {
         <EventForm event={dialog.event} defaultDate={dialog.date} today={today} onClose={close} />
       )}
       {dialog?.kind === 'import' && <ImportCalendarDialog today={today} onClose={close} />}
+      <SyncConflictDialog />
       <UndoToast />
     </div>
   );
