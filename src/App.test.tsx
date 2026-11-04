@@ -166,6 +166,37 @@ describe('App', () => {
     expect(screen.queryByText('Logged 2h on "Essay"')).not.toBeInTheDocument();
   });
 
+  it('suggests when to work on each item, around events, and can turn the times off', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '2');
+    fireEvent.change(within(dialog).getByLabelText('Due date'), { target: { value: '2026-11-03' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    await user.click(screen.getByRole('button', { name: 'Add task' }));
+    dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Lab');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '1');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+
+    // Hours are 12pm to 6pm; a 1pm to 1:30pm class splits the essay.
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    dialog = screen.getByRole('dialog', { name: 'Add to your calendar' });
+    await user.type(within(dialog).getByLabelText('Name'), 'Class');
+    await user.selectOptions(within(dialog).getByLabelText('Repeats'), "Doesn't repeat");
+    fireEvent.change(within(dialog).getByLabelText('Starts'), { target: { value: '13:00' } });
+    fireEvent.change(within(dialog).getByLabelText('Ends'), { target: { value: '13:30' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+
+    expect(within(todaysList()).getByText('12pm – 2:30pm ·')).toHaveAttribute('title', 'Split around a break: 12pm – 1pm, 1:30pm – 2:30pm');
+    expect(within(todaysList()).getByText('2:30pm – 3:30pm ·')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: /Suggested times/ }));
+    expect(within(todaysList()).queryByText('2:30pm – 3:30pm ·')).not.toBeInTheDocument();
+  });
+
   it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
     const user = userEvent.setup();
     const { container } = renderApp();
