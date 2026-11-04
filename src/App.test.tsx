@@ -59,6 +59,33 @@ describe('App', () => {
     expect(screen.getAllByText(/usually 12pm – 6pm/)).toHaveLength(1);
   });
 
+  it('logs part of an item and pushes an item to tomorrow', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Write research essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '10');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+
+    // Did 1.5 of the 6 planned hours: it shows as done, and the rest stays on the list.
+    await user.click(screen.getByRole('button', { name: 'More for "Write research essay"' }));
+    await user.type(screen.getByLabelText('Hours done on "Write research essay"'), '1.5');
+    await user.click(within(todaysList()).getByRole('button', { name: 'Log' }));
+    expect(screen.getByText('1h 30m of 6h done')).toBeInTheDocument();
+    expect(within(todaysList()).getByText(/^4h 30m · due Mon, Nov 9/)).toBeInTheDocument();
+    expect(within(todaysList()).getByText('1h 30m done')).toBeInTheDocument();
+
+    // Push the rest to tomorrow, then bring it back.
+    await user.click(screen.getByRole('button', { name: 'More for "Write research essay"' }));
+    await user.click(screen.getByRole('button', { name: 'Push to tomorrow' }));
+    expect(screen.getByText('Pushed to tomorrow')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Mark "Write research essay" done' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Bring "Write research essay" back to today' }));
+    expect(screen.getByRole('checkbox', { name: 'Mark "Write research essay" done' })).toBeInTheDocument();
+    expect(screen.queryByText('Pushed to tomorrow')).not.toBeInTheDocument();
+  });
+
   it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
     const user = userEvent.setup();
     const { container } = renderApp();

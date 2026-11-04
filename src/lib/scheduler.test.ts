@@ -23,6 +23,15 @@ function summarize(schedule: ReturnType<typeof buildSchedule>): Record<ISODate, 
 }
 
 describe('buildSchedule', () => {
+  it('plans no work on a task before its notBefore date, giving the time to other tasks', () => {
+    const schedule = buildSchedule({
+      today: TODAY,
+      tasks: [{ ...task('essay', 2, 3), notBefore: addDays(TODAY, 1) }, task('lab', 5, 3)],
+      capacityOn: every(h(3)),
+    });
+    expect(summarize(schedule)).toEqual({ [TODAY]: ['lab:180'], [addDays(TODAY, 1)]: ['essay:180'] });
+  });
+
   it('fills a free day with work that is due later, so you stay ahead', () => {
     // Nothing is due for a week, but there are 6 hours free today.
     const schedule = buildSchedule({

@@ -12,6 +12,8 @@ export type Action =
   | { type: 'task/update'; id: string; draft: TaskDraft }
   | { type: 'task/delete'; id: string }
   | { type: 'task/setComplete'; id: string; complete: boolean }
+  | { type: 'task/push'; id: string; until: ISODate }
+  | { type: 'task/unpush'; id: string }
   | { type: 'work/log'; taskId: string; date: ISODate; minutes: number }
   | { type: 'work/undoDay'; taskId: string; date: ISODate }
   | { type: 'hours/setWeekday'; weekday: Weekday; ranges: TimeRange[] }
@@ -51,6 +53,17 @@ export function reducer(state: AppData, action: Action): AppData {
           if (t.id !== action.id) return t;
           if (action.complete) return { ...t, completedAt: new Date().toISOString() };
           const { completedAt: _completedAt, ...rest } = t;
+          return rest;
+        }),
+      };
+    case 'task/push':
+      return { ...state, tasks: state.tasks.map((t) => (t.id === action.id ? { ...t, notBefore: action.until } : t)) };
+    case 'task/unpush':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) => {
+          if (t.id !== action.id) return t;
+          const { notBefore: _notBefore, ...rest } = t;
           return rest;
         }),
       };

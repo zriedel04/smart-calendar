@@ -1,10 +1,11 @@
-import { AlertTriangle, Check, Clock, Coffee, PartyPopper, Plus, Sparkles } from 'lucide-react';
-import { useMemo, type ReactNode } from 'react';
+import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Plus, Sparkles } from 'lucide-react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventsOn, hasOverride, workingHoursOn } from '../lib/availability';
-import { formatDate, relativeDayPhrase } from '../lib/dates';
+import { addDays, formatDate, relativeDayPhrase } from '../lib/dates';
 import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange } from '../lib/time';
 import { cx } from '../components/cx';
+import { inputClass } from '../components/styles';
 import { eventTime } from '../components/eventStyles';
 import { Button, Card, EmptyState, PriorityBadge, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
@@ -47,6 +48,9 @@ export function TodayView({
   const openTasks = data.tasks.filter((t) => !isTaskComplete(t, plan.logged.get(t.id) ?? 0));
   const atRisk = openTasks.filter((t) => plan.forecasts.get(t.id)?.atRisk);
   const freeLeft = Math.max(0, capacity - goal);
+  // Tasks pushed off today that would otherwise still need work.
+  const pushed = openTasks.filter((t) => t.notBefore && t.notBefore > today);
+  const [openRow, setOpenRow] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
@@ -153,7 +157,7 @@ export function TodayView({
               <Button onClick={onLoadSample}>Try it with sample tasks</Button>
             </div>
           </EmptyState>
-        ) : pending.length === 0 && done.length === 0 ? (
+        ) : pending.length === 0 && done.length === 0 && pushed.length === 0 ? (
           capacity === 0 ? (
             <EmptyState icon={<Coffee className="size-6" />} title="No work hours today">
               Enjoy the day off. Your list picks back up on your next work day.
@@ -183,6 +187,22 @@ export function TodayView({
                   }
                   onToggle={() => dispatch({ type: 'work/log', taskId: task.id, date: today, minutes: item.minutes })}
                   onOpen={() => onEditTask(task)}
+                  actionsOpen={openRow === task.id}
+                  onToggleActions={() => setOpenRow(openRow === task.id ? null : task.id)}
+                  actions={
+                    <RowActions
+                      task={task}
+                      plannedMinutes={item.minutes}
+                      onLog={(minutes) => {
+                        dispatch({ type: 'work/log', taskId: task.id, date: today, minutes });
+                        setOpenRow(null);
+                      }}
+                      onPush={() => {
+                        dispatch({ type: 'task/push', id: task.id, until: addDays(today, 1) });
+                        setOpenRow(null);
+                      }}
+                    />
+                  }
                 />
               );
             })}
@@ -203,7 +223,28 @@ export function TodayView({
           </ul>
         )}
 
-        {pending.length === 0 && done.length > 0 && (
+        {pushed.length > 0 && (
+          <div className="mx-2 mt-2 mb-1 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/50">
+            <p className="font-medium text-slate-700 dark:text-slate-200">Pushed to tomorrow</p>
+            <ul className="mt-1 space-y-1">
+              {pushed.map((task) => (
+                <li key={task.id} className="flex items-center justify-between gap-3 text-slate-600 dark:text-slate-300">
+                  <span className="truncate">{task.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: 'task/unpush', id: task.id })}
+                    aria-label={`Bring "${task.title}" back to today`}
+                    className="shrink-0 font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-300"
+                  >
+                    Bring back
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {pending.length === 0 && done.length > 0 && pushed.length === 0 && (
           <p className="px-2 pt-3 pb-2 text-center text-sm font-medium text-emerald-700 dark:text-emerald-300">
             All done for today. Nice work!
           </p>
@@ -225,6 +266,9 @@ function ChecklistRow({
   meta,
   onToggle,
   onOpen,
+  actions,
+  actionsOpen = false,
+  onToggleActions,
 }: {
   checked: boolean;
   task: Task;
@@ -232,36 +276,113 @@ function ChecklistRow({
   meta: ReactNode;
   onToggle: () => void;
   onOpen: () => void;
+  /** Extra options shown under the row, such as logging part of it. */
+  actions?: ReactNode;
+  actionsOpen?: boolean;
+  onToggleActions?: () => void;
 }) {
   return (
-    <li className="flex items-center gap-3 px-2 py-3">
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={checked}
-        aria-label={checked ? `Mark "${task.title}" not done` : `Mark "${task.title}" done`}
-        onClick={onToggle}
-        className={cx(
-          'flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-          checked
-            ? 'border-emerald-500 bg-emerald-500 text-white'
-            : 'border-slate-300 text-transparent hover:border-indigo-500 hover:text-indigo-300 dark:border-slate-600',
-        )}
-      >
-        <Check className="size-3.5" strokeWidth={3} />
-      </button>
-      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
-        <p
+    <li className="px-2 py-3">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={checked ? `Mark "${task.title}" not done` : `Mark "${task.title}" done`}
+          onClick={onToggle}
           className={cx(
-            'truncate font-medium',
-            checked ? 'text-slate-400 line-through dark:text-slate-500' : 'text-slate-900 dark:text-white',
+            'flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+            checked
+              ? 'border-emerald-500 bg-emerald-500 text-white'
+              : 'border-slate-300 text-transparent hover:border-indigo-500 hover:text-indigo-300 dark:border-slate-600',
           )}
         >
-          {task.title}
-        </p>
-        <p className="truncate text-sm text-slate-500 dark:text-slate-400">{meta}</p>
-      </button>
-      {badge}
+          <Check className="size-3.5" strokeWidth={3} />
+        </button>
+        <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+          <p
+            className={cx(
+              'truncate font-medium',
+              checked ? 'text-slate-400 line-through dark:text-slate-500' : 'text-slate-900 dark:text-white',
+            )}
+          >
+            {task.title}
+          </p>
+          <p className="truncate text-sm text-slate-500 dark:text-slate-400">{meta}</p>
+        </button>
+        {badge}
+        {actions && (
+          <button
+            type="button"
+            aria-label={`More for "${task.title}"`}
+            aria-expanded={actionsOpen}
+            onClick={onToggleActions}
+            className={cx(
+              'flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200',
+              actionsOpen && 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200',
+            )}
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        )}
+      </div>
+      {actions && actionsOpen && <div className="mt-3 ml-9">{actions}</div>}
     </li>
+  );
+}
+
+/** Log part of an item, or push it off today's list. */
+function RowActions({
+  task,
+  plannedMinutes,
+  onLog,
+  onPush,
+}: {
+  task: Task;
+  plannedMinutes: number;
+  onLog: (minutes: number) => void;
+  onPush: () => void;
+}) {
+  const [hours, setHours] = useState('');
+  const minutes = Math.round(Number(hours) * 60);
+  const valid = hours.trim() !== '' && Number.isFinite(minutes) && minutes >= 5;
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (valid) onLog(minutes);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+      <form onSubmit={submit} className="flex items-center gap-2" noValidate>
+        <label htmlFor={`part-${task.id}`} className="text-slate-600 dark:text-slate-300">
+          Did part of it:
+        </label>
+        <div className="w-20">
+          <input
+            id={`part-${task.id}`}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.25"
+            placeholder="Hours"
+            value={hours}
+            onChange={(e) => setHours(e.target.value)}
+            aria-label={`Hours done on "${task.title}"`}
+            aria-describedby={`part-hint-${task.id}`}
+            className={cx(inputClass, 'py-1.5')}
+          />
+        </div>
+        <Button size="sm" type="submit" disabled={!valid}>
+          Log
+        </Button>
+        <span id={`part-hint-${task.id}`} className="sr-only">
+          {formatDuration(plannedMinutes)} planned today
+        </span>
+      </form>
+      <Button size="sm" variant="ghost" onClick={onPush}>
+        <ArrowRight className="size-4" /> Push to tomorrow
+      </Button>
+    </div>
   );
 }

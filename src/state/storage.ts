@@ -91,7 +91,8 @@ export function parseAppData(json: string): AppData {
           isISODate(t.dueDate) &&
           typeof t.estimateMinutes === 'number' &&
           t.estimateMinutes > 0 &&
-          typeof t.createdAt === 'string',
+          typeof t.createdAt === 'string' &&
+          (t.notBefore === undefined || isISODate(t.notBefore)),
       )
     : [];
 

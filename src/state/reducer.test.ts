@@ -21,6 +21,16 @@ describe('reducer', () => {
     expect(state.logs).toEqual([]);
   });
 
+  it('pushes a task off until a date and brings it back, and saves the date', () => {
+    let state = reducer(createEmptyData(), { type: 'task/add', draft });
+    const id = state.tasks[0]!.id;
+    state = reducer(state, { type: 'task/push', id, until: '2026-11-04' });
+    expect(state.tasks[0]?.notBefore).toBe('2026-11-04');
+    expect(parseAppData(JSON.stringify(state)).tasks[0]?.notBefore).toBe('2026-11-04');
+    state = reducer(state, { type: 'task/unpush', id });
+    expect(state.tasks[0]).not.toHaveProperty('notBefore');
+  });
+
   it("undoes a day's ticked work for a task", () => {
     let state = reducer(createEmptyData(), { type: 'task/add', draft });
     const id = state.tasks[0]!.id;
