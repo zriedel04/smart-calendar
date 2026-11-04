@@ -52,6 +52,13 @@ function copyOf(series: TaskSeries, date: ISODate, createdAt: string): Task {
  *
  * Returns `data` itself when nothing changed.
  */
+/** Tasks you've started: ones with time logged, or with the timer running. */
+export function startedTaskIds(data: AppData): Set<string> {
+  const ids = new Set(data.logs.map((l) => l.taskId));
+  if (data.timer) ids.add(data.timer.taskId);
+  return ids;
+}
+
 export function fillSeries(data: AppData, today: ISODate): AppData {
   const allSeries = data.series ?? [];
   const createdAt = new Date().toISOString();

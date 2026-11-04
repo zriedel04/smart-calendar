@@ -47,6 +47,26 @@ describe('repeating tasks', () => {
     expect(data.logs).toMatchObject([{ taskId: monday.id, minutes: 60 }]);
   });
 
+  it('keeps a timed day and its timer when the repeating task is edited, stopped or made from a timed task', () => {
+    let data = add();
+    const monday = data.tasks.find((t) => t.dueDate === MONDAY)!;
+    data = reducer(data, { type: 'timer/start', taskId: monday.id, at: '2026-11-02T19:00:00.000Z', date: MONDAY });
+    const edited = reducer(data, { type: 'series/update', id: data.series![0]!.id, draft: { ...study, title: 'Study hard' }, today: MONDAY });
+    expect(edited.timer?.taskId).toBe(monday.id);
+    expect(edited.tasks.filter((t) => t.dueDate === MONDAY)).toHaveLength(1);
+    expect(edited.tasks.find((t) => t.dueDate === '2026-11-03')?.title).toBe('Study hard');
+    const stopped = reducer(data, { type: 'series/stop', id: data.series![0]!.id, today: MONDAY });
+    expect(stopped.timer?.taskId).toBe(monday.id);
+
+    let oneOff = reducer(createEmptyData(), { type: 'task/add', draft: { title: 'Run', dueDate: MONDAY, estimateMinutes: 30 } });
+    const run = oneOff.tasks[0]!.id;
+    oneOff = reducer(oneOff, { type: 'timer/start', taskId: run, at: '2026-11-02T19:00:00.000Z', date: MONDAY });
+    oneOff = reducer(oneOff, { type: 'series/add', draft: { ...study, title: 'Run' }, today: MONDAY, replacesTaskId: run });
+    expect(oneOff.timer?.taskId).toBe(run);
+    oneOff = reducer(oneOff, { type: 'timer/stop', at: '2026-11-02T19:20:00.000Z', date: MONDAY });
+    expect(oneOff.logs).toMatchObject([{ taskId: run, minutes: 20 }]);
+  });
+
   it('skips a day, keeping it as finished if you logged time on it', () => {
     let data = add();
     const [monday, tuesday] = data.tasks;

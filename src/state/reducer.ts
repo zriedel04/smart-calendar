@@ -2,7 +2,7 @@ import type { CalendarEvent } from '../lib/availability';
 import { addDays, type ISODate, type Weekday } from '../lib/dates';
 import type { TimeRange } from '../lib/time';
 import { createId } from './ids';
-import { fillSeries } from './recurring';
+import { fillSeries, startedTaskIds } from './recurring';
 import type { AppData, Task, TaskSeries } from './types';
 
 export type TaskDraft = Pick<Task, 'title' | 'dueDate' | 'estimateMinutes' | 'notes' | 'sourceId' | 'planDate'>;
@@ -60,7 +60,7 @@ function withoutTimerOn(state: AppData, taskId: string): AppData {
 
 /** Removes a series' copies from today on that you haven't started or finished. */
 function dropUpcomingCopies(state: AppData, seriesId: string, today: ISODate): Task[] {
-  const started = new Set(state.logs.map((l) => l.taskId));
+  const started = startedTaskIds(state);
   return state.tasks.filter(
     (t) => t.seriesId !== seriesId || t.dueDate < today || t.completedAt !== undefined || started.has(t.id),
   );
@@ -228,9 +228,10 @@ function apply(state: AppData, action: Action): AppData {
       const series: TaskSeries = { ...action.draft, id: createId(), createdAt };
       let { tasks, logs } = state;
       // A one-off task turned into a repeating one is replaced by its copies, in the same step so a
-      // single Undo can't leave both. If you logged time on it, it's kept as finished instead.
+      // single Undo can't leave both. If you started it, it's kept as finished instead, and a running
+      // timer keeps going so stopping it still logs the time.
       const replaced = action.replacesTaskId;
-      if (replaced && logs.some((l) => l.taskId === replaced)) {
+      if (replaced && startedTaskIds(state).has(replaced)) {
         tasks = tasks.map((t) => (t.id === replaced ? { ...t, completedAt: createdAt } : t));
       } else if (replaced) {
         tasks = tasks.filter((t) => t.id !== replaced);
