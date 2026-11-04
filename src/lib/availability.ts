@@ -62,8 +62,13 @@ export function eventOccursOn(event: CalendarEvent, date: ISODate): boolean {
   if (event.repeat === 'yearly') {
     const monthDay = event.date.slice(5);
     if (date.slice(5) === monthDay) return true;
-    // A Feb 29 birthday is celebrated on Feb 28 in other years.
-    return monthDay === '02-29' && date.slice(5) === '02-28' && !isLeapYear(Number(date.slice(0, 4)));
+    // A Feb 29 birthday is celebrated on Feb 28 in other years. Other Feb 29 events only happen in leap years.
+    return (
+      eventKind(event) === 'birthday' &&
+      monthDay === '02-29' &&
+      date.slice(5) === '02-28' &&
+      !isLeapYear(Number(date.slice(0, 4)))
+    );
   }
   return diff === 0;
 }

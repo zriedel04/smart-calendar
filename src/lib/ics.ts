@@ -250,7 +250,8 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
   // to this device's zone on its own, since daylight saving can change the gap between the two zones.
   const timePart = allDay ? '' : startProp.value.trim().slice(8);
   const occurrenceAt = (date: ISODate) => parseMoment(date.replace(/-/g, '') + timePart, startProp.params.TZID);
-  const length = endMinutes - startMinutes;
+  // The full length, before the first occurrence was cut off at midnight; each occurrence is cut off on its own.
+  const length = !allDay && end ? Math.max(0, Math.round((end.instant - start.instant) / 60000)) : 0;
 
   const byDay = (rule.BYDAY ?? '')
     .split(',')

@@ -80,10 +80,16 @@ describe('availability', () => {
   });
 
   it('moves a Feb 29 birthday to Feb 28 outside leap years', () => {
-    const leap = event({ date: '2024-02-29', repeat: 'yearly', allDay: true });
+    const leap = event({ date: '2024-02-29', repeat: 'yearly', allDay: true, kind: 'birthday' });
     expect(eventOccursOn(leap, '2025-02-28')).toBe(true);
     expect(eventOccursOn(leap, '2028-02-29')).toBe(true);
     expect(eventOccursOn(leap, '2028-02-28')).toBe(false);
+  });
+
+  it('keeps other Feb 29 yearly events to leap years', () => {
+    const party = event({ date: '2024-02-29', repeat: 'yearly', allDay: true, kind: 'other' });
+    expect(eventOccursOn(party, '2025-02-28')).toBe(false);
+    expect(eventOccursOn(party, '2028-02-29')).toBe(true);
   });
 
   it('does not take all-day events out of work hours unless asked to', () => {

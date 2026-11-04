@@ -142,4 +142,15 @@ describe('parseIcs', () => {
     const [leap] = parseIcs(calendar('UID:l\r\nSUMMARY:Leap party\r\nDTSTART;VALUE=DATE:20240229\r\nRRULE:FREQ=YEARLY;COUNT=2'));
     expect(leap).toMatchObject({ date: '2024-02-29', repeat: 'yearly', until: '2028-02-29' });
   });
+
+  it('cuts each occurrence off at midnight on its own', () => {
+    // 2-4am New York is 11pm-1am in Phoenix on Oct 26 (cut to 11pm-midnight), then midnight-2am from Nov 2.
+    const entries = parseIcs(
+      calendar('UID:n\r\nSUMMARY:Night shift\r\nDTSTART;TZID=America/New_York:20261026T020000\r\nDTEND;TZID=America/New_York:20261026T040000\r\nRRULE:FREQ=WEEKLY;COUNT=2'),
+    );
+    expect(entries.map((e) => [e.date, e.start, e.end])).toEqual([
+      ['2026-10-25', 23 * 60, 24 * 60],
+      ['2026-11-02', 0, 2 * 60],
+    ]);
+  });
 });
