@@ -159,5 +159,14 @@ export function parseAppData(json: string): AppData {
       )
     : [];
 
-  return { version: 1, tasks, logs, weeklyHours, overrides, events, series };
+  const timer =
+    isRecord(value.timer) &&
+    typeof value.timer.taskId === 'string' &&
+    taskIds.has(value.timer.taskId) &&
+    typeof value.timer.startedAt === 'string' &&
+    !Number.isNaN(Date.parse(value.timer.startedAt))
+      ? { taskId: value.timer.taskId, startedAt: value.timer.startedAt }
+      : undefined;
+
+  return { version: 1, tasks, logs, weeklyHours, overrides, events, series, ...(timer ? { timer } : {}) };
 }

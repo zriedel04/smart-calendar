@@ -1,8 +1,8 @@
-import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Pin, Plus, Repeat, SkipForward, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Timer } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
-import { addDays, formatDate, relativeDayPhrase } from '../lib/dates';
+import { addDays, formatDate, localToday, relativeDayPhrase } from '../lib/dates';
 import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange, type TimeRange } from '../lib/time';
 import { cx } from '../components/cx';
@@ -205,6 +205,9 @@ export function TodayView({
                   badge={<PriorityBadge priority={priorityOf(task.dueDate, today)} />}
                   meta={
                     <>
+                      {data.timer?.taskId === task.id && (
+                        <Timer className="mr-1 inline size-3.5 align-[-2px] text-indigo-600 dark:text-indigo-300" aria-label="Timer running" />
+                      )}
                       {showTimes && <SuggestedTime ranges={times.get(task.id)} />}
                       {task.seriesId && <Repeat className="mr-1 inline size-3.5 align-[-2px]" aria-label="Repeats" />}
                       {task.planDate === today && (
@@ -224,6 +227,16 @@ export function TodayView({
                     <RowActions
                       task={task}
                       plannedMinutes={item.minutes}
+                      timing={data.timer?.taskId === task.id}
+                      onTimer={() => {
+                        const at = new Date().toISOString();
+                        dispatch(
+                          data.timer?.taskId === task.id
+                            ? { type: 'timer/stop', at, date: localToday() }
+                            : { type: 'timer/start', taskId: task.id, at, date: localToday() },
+                        );
+                        setOpenRow(null);
+                      }}
                       onLog={(minutes) => {
                         dispatch({ type: 'work/log', taskId: task.id, date: today, minutes });
                         setOpenRow(null);
@@ -371,11 +384,15 @@ function ChecklistRow({
 function RowActions({
   task,
   plannedMinutes,
+  timing,
+  onTimer,
   onLog,
   onPush,
 }: {
   task: Task;
   plannedMinutes: number;
+  timing: boolean;
+  onTimer: () => void;
   onLog: (minutes: number) => void;
   onPush: () => void;
 }) {
@@ -390,6 +407,17 @@ function RowActions({
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+      <Button size="sm" variant={timing ? 'primary' : 'secondary'} onClick={onTimer}>
+        {timing ? (
+          <>
+            <Square className="size-3 fill-current" /> Stop and log
+          </>
+        ) : (
+          <>
+            <Play className="size-3.5 fill-current" /> Start timer
+          </>
+        )}
+      </Button>
       <form onSubmit={submit} className="flex items-center gap-2" noValidate>
         <label htmlFor={`part-${task.id}`} className="text-slate-600 dark:text-slate-300">
           Did part of it:

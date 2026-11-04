@@ -51,6 +51,15 @@ export function formatDuration(minutes: Minutes): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
+/** A running timer's reading, such as "4:07" or "1:02:45". */
+export function formatStopwatch(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+
 /** Drops empty or invalid ranges, sorts them, and merges any that overlap or touch. */
 export function normalizeRanges(ranges: readonly TimeRange[]): TimeRange[] {
   const valid = ranges

@@ -239,6 +239,32 @@ describe('App', () => {
     expect(within(day(2)).getByText('Essay')).toBeInTheDocument();
   });
 
+  it('times work on a task from any screen and logs it when stopped', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '2');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+
+    await user.click(screen.getByRole('button', { name: 'More for "Essay"' }));
+    await user.click(screen.getByRole('button', { name: 'Start timer' }));
+    expect(screen.getByRole('timer', { name: 'Timer for "Essay"' })).toBeInTheDocument();
+    expect(within(todaysList()).getByLabelText('Timer running')).toBeInTheDocument();
+
+    // It keeps running on other screens.
+    vi.setSystemTime(new Date(2026, 10, 2, 9, 45, 30));
+    await user.click(screen.getByRole('button', { name: 'Week' }));
+    expect(screen.getByRole('timer', { name: 'Timer for "Essay"' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Stop and log' }));
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    expect(screen.getByText('Logged 45m on "Essay"')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Today' }));
+    expect(within(todaysList()).getByText(/1h 15m · due/)).toBeInTheDocument();
+  });
+
   it('keeps keyboard focus inside an open dialog and makes the page behind it inert', async () => {
     const user = userEvent.setup();
     const { container } = renderApp();

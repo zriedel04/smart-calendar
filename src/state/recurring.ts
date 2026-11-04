@@ -52,6 +52,13 @@ function copyOf(series: TaskSeries, date: ISODate, createdAt: string): Task {
  *
  * Returns `data` itself when nothing changed.
  */
+/** Tasks you've started: ones with time logged, or with the timer running. */
+export function startedTaskIds(data: AppData): Set<string> {
+  const ids = new Set(data.logs.map((l) => l.taskId));
+  if (data.timer) ids.add(data.timer.taskId);
+  return ids;
+}
+
 export function fillSeries(data: AppData, today: ISODate): AppData {
   const allSeries = data.series ?? [];
   const createdAt = new Date().toISOString();
@@ -82,7 +89,9 @@ export function fillSeries(data: AppData, today: ISODate): AppData {
   const logged = loggedMinutesByTask(data.logs);
   const tasks: Task[] = [];
   for (const task of data.tasks) {
-    if (!task.seriesId || task.dueDate >= today || isTaskComplete(task, logged.get(task.id) ?? 0)) {
+    // A past copy with its timer still running is left alone until the timer stops, so that time isn't lost.
+    const timing = data.timer?.taskId === task.id;
+    if (!task.seriesId || task.dueDate >= today || timing || isTaskComplete(task, logged.get(task.id) ?? 0)) {
       tasks.push(task);
     } else if ((logged.get(task.id) ?? 0) > 0) {
       tasks.push({ ...task, completedAt: createdAt });

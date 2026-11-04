@@ -61,6 +61,14 @@ export interface AppData {
   events: CalendarEvent[];
   /** Repeating tasks. Missing in data saved before they existed. */
   series?: TaskSeries[];
+  /** A timer running on a task. Stopping it logs the time. */
+  timer?: RunningTimer;
+}
+
+export interface RunningTimer {
+  taskId: string;
+  /** ISO timestamp. */
+  startedAt: string;
 }
 
 export type { CalendarEvent, ISODate, Minutes, TimeRange };
