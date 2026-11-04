@@ -151,6 +151,28 @@ describe('mergeAppData', () => {
     expect(merged.tasks.some((t) => t.id === friday.id)).toBe(true);
   });
 
+  it("keeps a repeating task's day ticked off on one device that the other cleared as missed", () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const monday = base.tasks.find((t) => t.dueDate === '2026-11-02')!;
+    const phone = reducer(base, { type: 'task/setComplete', id: monday.id, complete: true });
+    const laptop = reducer(base, { type: 'series/fill', today: '2026-11-03' });
+    for (const merged of [mergeAppData(base, phone, laptop), mergeAppData(base, laptop, phone)]) {
+      expect(merged.tasks.find((t) => t.id === monday.id)?.completedAt).toBeDefined();
+    }
+  });
+
+  it("keeps a finished repeating day deleted on purpose deleted", () => {
+    const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
+    let base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });
+    const monday = base.tasks.find((t) => t.dueDate === '2026-11-02')!;
+    base = reducer(base, { type: 'task/setComplete', id: monday.id, complete: true });
+    const phone = reducer(base, { type: 'task/delete', id: monday.id });
+    for (const merged of [mergeAppData(base, phone, base), mergeAppData(base, base, phone)]) {
+      expect(merged.tasks.some((t) => t.id === monday.id)).toBe(false);
+    }
+  });
+
   it('keeps a day skipped on one device while the other moved on to a new day', () => {
     const draft = { title: 'Study', estimateMinutes: 60, days: WEEKDAYS, startDate: '2026-11-02' };
     const base = reducer(createEmptyData(), { type: 'series/add', draft, today: '2026-11-02' });

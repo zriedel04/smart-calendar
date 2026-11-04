@@ -145,18 +145,21 @@ function mergeSkips(base: AppData, local: AppData, remote: AppData, data: AppDat
 
 /**
  * The app clears a repeating task's missed day by itself once the day has passed. If the other
- * device logged time or started a timer on that day meanwhile, bring the day back so the work isn't
- * lost. The next fill marks it finished.
+ * device logged time, started a timer or ticked the day off meanwhile, bring the day back so the
+ * work isn't lost. The next fill marks a started day finished.
  */
-function keepStartedCopies(local: AppData, remote: AppData, data: AppData) {
+function keepStartedCopies(base: AppData, local: AppData, remote: AppData, data: AppData) {
+  const finishedInBase = new Set(base.tasks.filter((t) => t.completedAt).map((t) => t.id));
   const present = new Set(data.tasks.map((t) => t.id));
   const started = new Set([...data.logs.map((l) => l.taskId), ...(data.timer ? [data.timer.taskId] : [])]);
-  for (const id of started) {
-    if (present.has(id)) continue;
-    const copy = local.tasks.find((t) => t.id === id) ?? remote.tasks.find((t) => t.id === id);
-    if (copy?.seriesId) {
-      data.tasks.push(copy);
-      present.add(id);
+  for (const t of [...local.tasks, ...remote.tasks]) {
+    if (present.has(t.id) || !t.seriesId) continue;
+    // A day finished before the last sync and then deleted on purpose stays deleted.
+    if (started.has(t.id) || (t.completedAt && !finishedInBase.has(t.id))) {
+      // Prefer a finished copy if one side has it.
+      const finished = [...local.tasks, ...remote.tasks].find((c) => c.id === t.id && c.completedAt);
+      data.tasks.push(finished ?? t);
+      present.add(t.id);
     }
   }
 }
@@ -206,7 +209,7 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   if (timer) merged.timer = timer;
 
   mergeSkips(base, local, remote, merged);
-  keepStartedCopies(local, remote, merged);
+  keepStartedCopies(base, local, remote, merged);
   dedupeCopies(merged);
   dropCopiesOfStoppedSeries(base, merged);
   fitCopiesToSeries(base, merged);
