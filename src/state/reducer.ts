@@ -144,6 +144,8 @@ function apply(state: AppData, action: Action): AppData {
         }),
       };
     case 'task/skip': {
+      // Skipping the day ends its timer without logging, whether the copy is removed or kept as finished.
+      state = withoutTimerOn(state, action.id);
       // Skipping a day of a repeating task removes it, unless you logged time on it: then it's kept
       // as finished so that time isn't lost.
       if (!state.logs.some((l) => l.taskId === action.id)) {

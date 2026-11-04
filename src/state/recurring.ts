@@ -82,7 +82,9 @@ export function fillSeries(data: AppData, today: ISODate): AppData {
   const logged = loggedMinutesByTask(data.logs);
   const tasks: Task[] = [];
   for (const task of data.tasks) {
-    if (!task.seriesId || task.dueDate >= today || isTaskComplete(task, logged.get(task.id) ?? 0)) {
+    // A past copy with its timer still running is left alone until the timer stops, so that time isn't lost.
+    const timing = data.timer?.taskId === task.id;
+    if (!task.seriesId || task.dueDate >= today || timing || isTaskComplete(task, logged.get(task.id) ?? 0)) {
       tasks.push(task);
     } else if ((logged.get(task.id) ?? 0) > 0) {
       tasks.push({ ...task, completedAt: createdAt });

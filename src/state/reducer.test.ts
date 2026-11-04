@@ -182,6 +182,11 @@ describe('hasUserData', () => {
       expect(reducer(start(state), { type: 'task/delete', id: essay })).not.toHaveProperty('timer');
       const copy = { ...state, tasks: state.tasks.map((t) => (t.id === essay ? { ...t, seriesId: 's1' } : t)) };
       expect(reducer(start(copy), { type: 'task/skip', id: essay })).not.toHaveProperty('timer');
+      // A copy you logged time on is kept as finished when skipped, and its timer still stops.
+      const started = reducer(copy, { type: 'work/log', taskId: essay, date: '2026-11-02', minutes: 10 });
+      const skipped = reducer(start(started), { type: 'task/skip', id: essay });
+      expect(skipped.tasks.find((t) => t.id === essay)?.completedAt).toBeDefined();
+      expect(skipped).not.toHaveProperty('timer');
     });
 
     it("doesn't load a timer for a task that isn't there", () => {

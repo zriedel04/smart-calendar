@@ -36,6 +36,17 @@ describe('repeating tasks', () => {
     expect(data.tasks.find((t) => t.id === tuesday.id)?.completedAt).toBeDefined();
   });
 
+  it("keeps a day whose timer is still running past midnight, so stopping it logs the time", () => {
+    let data = add();
+    const monday = data.tasks.find((t) => t.dueDate === MONDAY)!;
+    data = reducer(data, { type: 'timer/start', taskId: monday.id, at: '2026-11-03T06:30:00.000Z', date: MONDAY });
+    data = fillSeries(data, '2026-11-03');
+    expect(data.tasks.some((t) => t.id === monday.id)).toBe(true);
+    expect(data.timer?.taskId).toBe(monday.id);
+    data = reducer(data, { type: 'timer/stop', at: '2026-11-03T07:30:00.000Z', date: '2026-11-03' });
+    expect(data.logs).toMatchObject([{ taskId: monday.id, minutes: 60 }]);
+  });
+
   it('skips a day, keeping it as finished if you logged time on it', () => {
     let data = add();
     const [monday, tuesday] = data.tasks;
