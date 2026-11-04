@@ -1,10 +1,11 @@
-import { CalendarClock, CalendarPlus, Download, Pencil, Plus, RotateCcw, Upload } from 'lucide-react';
+import { CalendarPlus, Download, Pencil, RotateCcw, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
-import type { CalendarEvent } from '../lib/availability';
+import { eventBlocksWork, type CalendarEvent } from '../lib/availability';
 import { formatDate, WEEKDAY_NAMES, WEEKDAYS_MONDAY_FIRST, weekdayOf, type ISODate } from '../lib/dates';
 import { formatDuration, formatRange, normalizeRanges, totalMinutes } from '../lib/time';
 import { HoursEditor } from '../components/HoursEditor';
-import { Button, Card, CardHeader } from '../components/ui';
+import { eventRepeatLabel, eventTime } from '../components/eventStyles';
+import { Button, Card, CardHeader, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
 import { createEmptyData } from '../state/defaults';
 import { parseAppData } from '../state/storage';
@@ -13,11 +14,13 @@ export function ScheduleView({
   today,
   onEditDay,
   onEditEvent,
+  onImport,
   onLoadSample,
 }: {
   today: ISODate;
   onEditDay: (date?: ISODate) => void;
   onEditEvent: (event?: CalendarEvent) => void;
+  onImport: () => void;
   onLoadSample: () => void;
 }) {
   const { data, dispatch } = useStore();
@@ -144,16 +147,16 @@ export function ScheduleView({
 
       <Card>
         <CardHeader
-          title="Fixed events"
-          description="Classes, shifts and appointments. Their time is taken out of your work hours."
+          title="Events"
+          description="Classes, shifts, plans and birthdays. Events that take time away from work are left out of your work hours."
           action={
-            <Button size="sm" onClick={() => onEditEvent()}>
-              <Plus className="size-4" /> Add event
+            <Button size="sm" onClick={onImport}>
+              <CalendarPlus className="size-4" /> Import .ics
             </Button>
           }
         />
         {data.events.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No fixed events.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No events yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {data.events.map((event) => (
@@ -163,14 +166,12 @@ export function ScheduleView({
                   onClick={() => onEditEvent(event)}
                   className="flex w-full items-center gap-3 py-2.5 text-left"
                 >
-                  <CalendarClock className="size-4 shrink-0 text-slate-400" />
+                  <EventIcon event={event} className="size-4 text-slate-400" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-slate-900 dark:text-white">{event.title}</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                      {event.repeat === 'weekly'
-                        ? `Every ${WEEKDAY_NAMES[weekdayOf(event.date)]}`
-                        : formatDate(event.date, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-                      · {formatRange(event)}
+                      {eventRepeatLabel(event)} · {eventTime(event)}
+                      {!eventBlocksWork(event) && event.kind !== 'birthday' && ' · Doesn’t block work'}
                     </p>
                   </div>
                   <Pencil className="size-4 text-slate-400" />

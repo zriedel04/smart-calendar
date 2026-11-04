@@ -1,3 +1,4 @@
+import type { EventKind } from '../lib/availability';
 import { isISODate } from '../lib/dates';
 import type { TimeRange } from '../lib/time';
 import { createEmptyData } from './defaults';
@@ -14,6 +15,8 @@ export interface StorageAdapter {
   /** Calls `onChange` when the data is changed somewhere else, such as another open tab. Returns an unsubscribe function. */
   subscribe?(onChange: (data: AppData) => void): () => void;
 }
+
+const EVENT_KINDS: readonly EventKind[] = ['busy', 'plan', 'birthday', 'other'];
 
 export const STORAGE_KEY = 'smart-calendar:data';
 
@@ -126,7 +129,11 @@ export function parseAppData(json: string): AppData {
           typeof e.title === 'string' &&
           isISODate(e.date) &&
           isRange(e) &&
-          (e.repeat === 'none' || e.repeat === 'weekly'),
+          (e.repeat === 'none' || e.repeat === 'weekly' || e.repeat === 'monthly' || e.repeat === 'yearly') &&
+          (e.kind === undefined || EVENT_KINDS.includes(e.kind as EventKind)) &&
+          (e.until === undefined || isISODate(e.until)) &&
+          (e.allDay === undefined || typeof e.allDay === 'boolean') &&
+          (e.blocksWork === undefined || typeof e.blocksWork === 'boolean'),
       )
     : [];
 

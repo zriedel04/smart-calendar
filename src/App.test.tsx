@@ -137,6 +137,8 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Month' }));
 
     expect(screen.getByRole('heading', { name: 'November 2026' })).toBeInTheDocument();
+    // A timed event shows its time under its title in the day's cell.
+    expect(screen.getByRole('button', { name: 'Monday, November 2' })).toHaveTextContent(/Team standup\s*1pm – 1:30pm/);
     // Today (Monday, Nov 2) is selected: its planned work is listed below the grid.
     const checkbox = screen.getByRole('checkbox', { name: 'Check off "Reply to internship recruiter"' });
     await user.click(checkbox);
@@ -146,6 +148,98 @@ describe('App', () => {
     // Logging all of its time finished the task, so its due-date entry has no "not finished" toggle that wouldn't work.
     expect(screen.queryByRole('checkbox', { name: /Mark "Reply to internship recruiter"/ })).not.toBeInTheDocument();
     expect(screen.getByText('Finished')).toBeInTheDocument();
+  });
+
+  it('adds a birthday from the month calendar without taking work time', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Thursday, November 12' }));
+    await user.click(screen.getByRole('button', { name: 'Event' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add to your calendar' });
+    await user.click(within(dialog).getByRole('radio', { name: 'Birthday' }));
+    await user.type(within(dialog).getByLabelText('Name'), "Mom's birthday");
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+
+    expect(screen.getByRole('button', { name: /^Mom's birthday/ })).toHaveTextContent('All day');
+    const [saved] = JSON.parse(localStorage.getItem(STORAGE_KEY)!).events;
+    expect(saved).toMatchObject({ date: '2026-11-12', kind: 'birthday', allDay: true, repeat: 'yearly', blocksWork: false });
+  });
+
+  it('imports Canvas assignments as tasks and other entries as events, once', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT\r\nUID:event-assignment-1\r\nSUMMARY:Lab 5 report\r\nDTSTART:20261106T065900Z\r\nDTEND:20261106T065900Z\r\nEND:VEVENT',
+      'BEGIN:VEVENT\r\nUID:event-assignment-0\r\nSUMMARY:Old quiz\r\nDTSTART:20261001T065900Z\r\nDTEND:20261001T065900Z\r\nEND:VEVENT',
+      'BEGIN:VEVENT\r\nUID:class-1\r\nSUMMARY:Physics lecture\r\nDTSTART:20261103T130000\r\nDTEND:20261103T140000\r\nRRULE:FREQ=WEEKLY\r\nEND:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+    const file = () => new File([ics], 'canvas.ics', { type: 'text/calendar' });
+
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    let dialog = screen.getByRole('dialog', { name: 'Import a calendar' });
+    await user.upload(within(dialog).getByLabelText('Calendar file'), file());
+
+    // The past quiz is skipped and hidden; the assignment needs hours before importing.
+    expect(await within(dialog).findByText('Lab 5 report')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Old quiz')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Import "Physics lecture" as')).toHaveValue('event');
+    await user.click(within(dialog).getByRole('button', { name: 'Import 1 task and 1 event' }));
+    expect(within(dialog).getByText(/Add hours for the highlighted task/)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Hours for "Lab 5 report"'), '3');
+    await user.click(within(dialog).getByRole('button', { name: 'Import 1 task and 1 event' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Lab 5 report')).toBeInTheDocument();
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.tasks[0]).toMatchObject({ dueDate: '2026-11-05', estimateMinutes: 180 });
+    expect(saved.events[0]).toMatchObject({ title: 'Physics lecture', repeat: 'weekly', start: 780, end: 840 });
+
+    // Importing the same file again adds nothing.
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    dialog = screen.getByRole('dialog', { name: 'Import a calendar' });
+    await user.upload(within(dialog).getByLabelText('Calendar file'), file());
+    expect(await within(dialog).findByText(/already in your calendar or already over/)).toBeInTheDocument();
+
+    // Picking a file with nothing in it clears the preview and says why.
+    await user.click(within(dialog).getByRole('button', { name: /Choose a different file/ }));
+    await user.upload(within(dialog).getByLabelText('Calendar file'), new File(['not a calendar'], 'x.ics'));
+    expect(await within(dialog).findByText(/doesn't have any calendar entries/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /^Import|Nothing to import/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the last date of a yearly event when it is edited', async () => {
+    const data = createSampleData('2026-11-02');
+    data.events = [
+      { id: 'fair', title: 'County fair', date: '2026-10-01', start: 0, end: 1440, repeat: 'yearly', allDay: true, kind: 'other', until: '2028-10-01' },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.click(screen.getByRole('button', { name: /County fair/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit event' });
+    expect(within(dialog).getByLabelText('Last date (optional)')).toHaveValue('2028-10-01');
+    await user.type(within(dialog).getByLabelText('Name'), ' 2026');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    const [saved] = JSON.parse(localStorage.getItem(STORAGE_KEY)!).events;
+    expect(saved).toMatchObject({ title: 'County fair 2026', until: '2028-10-01' });
+  });
+
+  it('offers adding a task or an event at the top of every page', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    for (const tab of ['Today', 'Week', 'Month', 'Tasks', 'Schedule']) {
+      await user.click(screen.getByRole('button', { name: tab }));
+      expect(screen.getByRole('button', { name: 'Add task' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add event' })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    expect(screen.getByRole('dialog', { name: 'Add to your calendar' })).toBeInTheDocument();
   });
 
   it('remembers data after a reload', async () => {

@@ -12,6 +12,8 @@ export interface Task {
   createdAt: string;
   /** Set when you mark a task finished yourself, even if you logged less time than estimated. */
   completedAt?: string;
+  /** The calendar entry this was imported from, so importing the same file twice doesn't add it twice. */
+  sourceId?: string;
 }
 
 /** Time you spent on a task on a given day. Ticking an item on the Today list creates one. */

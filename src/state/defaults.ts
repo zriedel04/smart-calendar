@@ -48,6 +48,26 @@ export function createSampleData(today: ISODate): AppData {
         end: 13 * 60 + 30,
         repeat: 'weekly',
       },
+      {
+        id: createId(),
+        title: "Alex's birthday",
+        date: addDays(today, 4),
+        start: 0,
+        end: 24 * 60,
+        repeat: 'yearly',
+        kind: 'birthday',
+        allDay: true,
+        blocksWork: false,
+      },
+      {
+        id: createId(),
+        title: 'Dinner with friends',
+        date: addDays(today, 2),
+        start: 18 * 60 + 30,
+        end: 20 * 60 + 30,
+        repeat: 'none',
+        kind: 'plan',
+      },
     ],
   };
 }
