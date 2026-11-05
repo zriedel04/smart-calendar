@@ -582,6 +582,30 @@ describe('App', () => {
     expect(saved).toContainEqual(expect.objectContaining({ title: 'Team standup', date: '2026-11-09', repeat: 'none', start: 15 * 60 }));
   });
 
+  it('finds tasks and events by name, place or notes', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+
+    await user.keyboard('/');
+    let dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'standup');
+    // Today is Monday, Nov 2 and the standup is at 1pm every Monday.
+    expect(within(dialog).getByRole('button', { name: /Team standup/ })).toHaveTextContent('Every Monday · next Mon, Nov 2');
+
+    await user.clear(within(dialog).getByLabelText('Search tasks and events'));
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'dynamic');
+    // Found by its notes.
+    await user.click(within(dialog).getByRole('button', { name: /Algorithms problem set 6/ }));
+    expect(screen.getByRole('dialog', { name: 'Edit task' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'zebra');
+    expect(within(dialog).getByText('Nothing matches "zebra".')).toBeInTheDocument();
+  });
+
   it('keeps the last date of a yearly event when it is edited', async () => {
     const data = createSampleData('2026-11-02');
     data.events = [

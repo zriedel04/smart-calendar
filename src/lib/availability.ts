@@ -151,6 +151,20 @@ export function eventStartsOn(event: CalendarEvent, date: ISODate): boolean {
   return diff === 0;
 }
 
+/** How far ahead to look for an event's next day. */
+const LOOK_AHEAD_DAYS = 2 * 366;
+
+/** The next day on or after `today` the event happens, or null if it's over. */
+export function nextDayOf(event: CalendarEvent, today: ISODate): ISODate | null {
+  if (event.repeat === 'none') return runStartOn(event, today) ?? (event.date >= today ? event.date : null);
+  for (let i = 0; i < LOOK_AHEAD_DAYS; i++) {
+    const day = addDays(today, i);
+    if (event.until && day > event.until) return null;
+    if (runStartOn(event, day) !== null) return day;
+  }
+  return null;
+}
+
 /** Events on `date`, all-day ones first, then by start time. */
 export function eventsOn(events: readonly CalendarEvent[], date: ISODate): CalendarEvent[] {
   return events
