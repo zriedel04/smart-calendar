@@ -371,6 +371,28 @@ describe('App', () => {
     expect(localStorage.getItem('smart-calendar:month-due-only')).toBe('on');
   });
 
+  it('shows US holidays on the calendar, and hides them when switched off', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Thursday, November 26, Thanksgiving' }));
+    expect(screen.getByText('Federal holiday')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    expect(screen.getByText(/Coming up: Veterans Day \(Nov 11\), Thanksgiving \(Nov 26\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Show US holidays' }));
+    expect(window.localStorage.getItem('smart-calendar:show-holidays')).toBe('off');
+
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    expect(screen.getByRole('button', { name: 'Thursday, November 26' })).toBeInTheDocument();
+    expect(screen.queryByText('Thanksgiving')).not.toBeInTheDocument();
+
+    // Back on, for the other tests.
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.click(screen.getByRole('switch', { name: 'Show US holidays' }));
+  });
+
   it('adds a birthday from the month calendar without taking work time', async () => {
     const user = userEvent.setup();
     renderApp();

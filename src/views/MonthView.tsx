@@ -1,16 +1,17 @@
-import { Check, ChevronLeft, ChevronRight, Flag, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Flag, Plus, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { eventKind, eventsOn, type CalendarEvent } from '../lib/availability';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
+import { holidaysOn } from '../lib/holidays';
 import { priorityOf, type Priority } from '../lib/priority';
 import { formatDuration, formatRange } from '../lib/time';
 import { cx } from '../components/cx';
-import { EVENT_CHIP, EVENT_DOT, eventTime } from '../components/eventStyles';
+import { EVENT_CHIP, EVENT_DOT, eventTime, HOLIDAY_CHIP, HOLIDAY_STAR } from '../components/eventStyles';
 import { PRIORITY_DOT } from '../components/styles';
 import { Button, Card, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
 import { isTaskComplete, type Plan } from '../state/planner';
-import { useDueDatesOnly } from '../state/preferences';
+import { useDueDatesOnly, useShowHolidays } from '../state/preferences';
 import type { Task } from '../state/types';
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -83,6 +84,8 @@ export function MonthView({
     setPickedTasks(new Set());
   };
   const [dueOnly, setDueOnly] = useDueDatesOnly();
+  const [showHolidays] = useShowHolidays();
+  const holidaysFor = (date: ISODate) => (showHolidays ? holidaysOn(date) : []);
 
   const tasksById = useMemo(() => new Map(data.tasks.map((t) => [t.id, t])), [data.tasks]);
   const complete = (task: Task) => isTaskComplete(task, plan.logged.get(task.id) ?? 0);
@@ -128,6 +131,7 @@ export function MonthView({
   for (let d = gridStart; d < nextMonth || days.length % 7 !== 0; d = addDays(d, 1)) days.push(d);
   const selectedEntries = entriesFor(selected);
   const selectedEvents = eventsOn(data.events, selected);
+  const selectedHolidays = holidaysFor(selected);
 
   return (
     <div className="space-y-4">
@@ -223,15 +227,19 @@ export function MonthView({
             const isToday = date === today;
             const entries = entriesFor(date);
             const events = eventsOn(data.events, date);
-            const shownEvents = events.slice(0, 3);
-            const shown = entries.slice(0, 3 - shownEvents.length);
-            const more = events.length + entries.length - shownEvents.length - shown.length;
+            const holidays = holidaysFor(date);
+            const shownHolidays = holidays.slice(0, 3);
+            const shownEvents = events.slice(0, 3 - shownHolidays.length);
+            const shown = entries.slice(0, 3 - shownHolidays.length - shownEvents.length);
+            const more =
+              holidays.length + events.length + entries.length - shownHolidays.length - shownEvents.length - shown.length;
+            const dotsLeft = Math.max(0, 4 - holidays.length);
             return (
               <button
                 key={date}
                 type="button"
                 onClick={() => (pickingDays ? setPickedDays(toggleIn(pickedDays, date)) : setSelected(date))}
-                aria-label={formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' })}
+                aria-label={[formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' }), ...holidays.map((h) => h.name)].join(', ')}
                 aria-pressed={pickingDays ? pickedDays.has(date) : selected === date}
                 className={cx(
                   'flex min-h-16 flex-col gap-0.5 border-r border-b border-slate-100 p-1 text-left align-top transition-colors sm:min-h-28 sm:p-1.5 dark:border-slate-800',
@@ -258,11 +266,15 @@ export function MonthView({
                   {Number(date.slice(8))}
                 </span>
                 {/* Phones: colored dots. Larger screens: titles. */}
-                <span className="flex flex-wrap gap-0.5 sm:hidden">
-                  {events.slice(0, 4).map((e) => (
+                <span className="flex flex-wrap items-center gap-0.5 sm:hidden">
+                  {/* A star, not a dot, so it can't be mistaken for an amber "Needed" task. */}
+                  {holidays.slice(0, 4).map((h) => (
+                    <Star key={h.name} className={cx('size-2 fill-current', HOLIDAY_STAR)} aria-hidden />
+                  ))}
+                  {events.slice(0, dotsLeft).map((e) => (
                     <span key={e.id} className={cx('size-1.5 rounded-full', EVENT_DOT[eventKind(e)])} />
                   ))}
-                  {entries.slice(0, Math.max(0, 4 - events.length)).map((e) => (
+                  {entries.slice(0, Math.max(0, dotsLeft - events.length)).map((e) => (
                     <span
                       key={e.key}
                       className={cx('size-1.5 rounded-full', e.done ? 'bg-slate-300 dark:bg-slate-600' : PRIORITY_DOT[e.priority])}
@@ -270,6 +282,15 @@ export function MonthView({
                   ))}
                 </span>
                 <span className="hidden w-full flex-col gap-0.5 sm:flex">
+                  {shownHolidays.map((h) => (
+                    <span
+                      key={h.name}
+                      className={cx('flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] leading-tight', HOLIDAY_CHIP)}
+                    >
+                      <Star className="size-2.5 shrink-0" aria-hidden />
+                      <span className="truncate">{h.name}</span>
+                    </span>
+                  ))}
                   {shownEvents.map((e) => (
                     <span
                       key={e.id}
@@ -336,8 +357,15 @@ export function MonthView({
             )}
           </div>
         </div>
-        {selectedEvents.length > 0 && (
+        {selectedHolidays.length + selectedEvents.length > 0 && (
           <ul className="mb-1 space-y-1 px-1">
+            {selectedHolidays.map((h) => (
+              <li key={h.name} className={cx('flex items-center gap-2 rounded-lg px-2 py-2 text-sm', HOLIDAY_CHIP)}>
+                <Star className="size-4 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1 truncate font-medium">{h.name}</span>
+                <span className="shrink-0 text-xs opacity-80">{h.federal ? 'Federal holiday' : 'Holiday'}</span>
+              </li>
+            ))}
             {selectedEvents.map((e) => (
               <li key={e.id}>
                 <button
@@ -353,7 +381,7 @@ export function MonthView({
             ))}
           </ul>
         )}
-        {selectedEntries.length === 0 && selectedEvents.length === 0 ? (
+        {selectedEntries.length === 0 && selectedEvents.length === 0 && selectedHolidays.length === 0 ? (
           <p className="px-2 pb-3 text-sm text-slate-500 dark:text-slate-400">Nothing on this day.</p>
         ) : selectedEntries.length === 0 ? null : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
