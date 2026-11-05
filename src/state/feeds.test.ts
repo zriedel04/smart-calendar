@@ -272,6 +272,32 @@ describe('calendar links', () => {
     expect(apply(data, [mat]).tasks).toHaveLength(1);
   });
 
+  it("keeps a course hidden on one device when the other's refresh finds a new course", () => {
+    const cse = { ...assignment('a1', 'Sprint 4 Report · CSE 485', '2026-11-06'), course: 'CSE 485' };
+    const mat = { ...assignment('a2', 'Section 5.4 · MAT 343', '2026-11-06'), course: 'MAT 343' };
+    const bio = { ...assignment('a3', 'Lab · BIO 181', '2026-11-06'), course: 'BIO 181' };
+    const base = apply(withFeed(), [cse, mat]);
+    const phone = apply(reducer(base, { type: 'feed/hideCourse', id: 'f1', course: 'MAT 343', hidden: true }), [cse, mat]);
+    const laptop = apply(base, [cse, mat, bio]);
+    const merged = mergeAppData(base, laptop, phone);
+    expect(merged.feeds![0]).toMatchObject({ hiddenCourses: ['MAT 343'], courses: ['BIO 181', 'CSE 485', 'MAT 343'] });
+    expect(apply(merged, [cse, mat, bio]).tasks.map((t) => t.title).sort()).toEqual(['Lab · BIO 181', 'Sprint 4 Report · CSE 485']);
+  });
+
+  it('keeps work logged on one device on an assignment whose course the other hid', () => {
+    const mat = { ...assignment('a2', 'Section 5.4 · MAT 343', '2026-11-06'), course: 'MAT 343' };
+    const base = apply(withFeed(), [mat]);
+    const id = base.tasks[0]!.id;
+    const phone = apply(reducer(base, { type: 'feed/hideCourse', id: 'f1', course: 'MAT 343', hidden: true }), [mat]);
+    expect(phone.tasks).toEqual([]);
+    const laptop = reducer(base, { type: 'work/log', taskId: id, date: TODAY, minutes: 30 });
+    const merged = mergeAppData(base, phone, laptop);
+    expect(merged.tasks.map((t) => t.id)).toEqual([id]);
+    expect(merged.logs).toHaveLength(1);
+    // A refresh afterwards keeps it, since it's started.
+    expect(apply(merged, [mat]).tasks).toHaveLength(1);
+  });
+
   it('shortens titles brought in before course codes were shortened', () => {
     let data = apply(withFeed(), [assignment('a1', 'Essay [2026FallC-T-ENG102-1234]', '2026-11-06'), { ...lecture('l1', '2026-11-03'), title: 'Lecture [2026FallC-T-BIO181-55]' }]);
     data = apply(data, [
