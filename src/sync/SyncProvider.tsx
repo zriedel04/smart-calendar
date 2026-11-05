@@ -190,6 +190,7 @@ export function SyncProvider({
       conflict: user ? conflict : null,
       conflictPostponed,
       signIn: (email) => backend.signIn(email),
+      verifyCode: (email, code) => backend.verifyCode(email, code),
       signOut: async () => {
         const current = userRef.current;
         await backend.signOut();

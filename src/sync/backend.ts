@@ -13,6 +13,8 @@ export interface SyncBackend {
   onUserChange(callback: (user: SyncUser | null) => void): () => void;
   /** Emails a sign-in link. Resolves to an error message, or null once it's sent. */
   signIn(email: string): Promise<string | null>;
+  /** Signs in with the code from the sign-in email. Resolves to an error message, or null once signed in. */
+  verifyCode(email: string, code: string): Promise<string | null>;
   signOut(): Promise<void>;
   store(userId: string): CloudStore;
   /** Calls back when another device saves this account's calendar. */
@@ -60,6 +62,14 @@ export function supabaseBackend(): SyncBackend {
         options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
       });
       return error ? signInErrorMessage(error) : null;
+    },
+    async verifyCode(email, code) {
+      const { db } = await load();
+      const { error } = await db.auth.verifyOtp({ email, token: code, type: 'email' });
+      if (!error) return null;
+      return error.code === 'otp_expired' || error.status === 403
+        ? 'That code has expired or is wrong. Check the newest email, or send a new one.'
+        : signInErrorMessage(error);
     },
     async signOut() {
       const { db } = await load();

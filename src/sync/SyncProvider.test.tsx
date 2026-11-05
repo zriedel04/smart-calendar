@@ -26,6 +26,12 @@ function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser |
       sent.push(email);
       return null;
     },
+    verifyCode: async (email, code) => {
+      if (code !== '123456') return 'That code has expired or is wrong. Check the newest email, or send a new one.';
+      user = { id: 'code-user', email };
+      userListeners.forEach((cb) => cb(user));
+      return null;
+    },
     signOut: async () => {
       user = null;
       userListeners.forEach((cb) => cb(null));
@@ -89,7 +95,7 @@ describe('Sync across devices', () => {
     await user.type(screen.getByLabelText('Email'), 'zach@example.com');
     await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }));
     expect(fake.sent).toEqual(['zach@example.com']);
-    expect(screen.getByText(/for a sign-in link/)).toBeInTheDocument();
+    expect(screen.getByText(/Open the sign-in link/)).toBeInTheDocument();
 
     // Opening the link finishes signing in, and this device's calendar becomes the account's.
     fake.finishSignIn(ME);
@@ -118,6 +124,26 @@ describe('Sync across devices', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByRole('button', { name: 'Email me a sign-in link' })).toBeInTheDocument();
     expect(taskTitles(JSON.parse(localStorage.getItem(STORAGE_KEY)!))).toContain('Added on the laptop');
+  });
+
+  it('signs in with the code from the email, for when the link opens in another browser', async () => {
+    const user = userEvent.setup();
+    const fake = fakeBackend(memoryStore());
+    renderWithSync(fake.backend);
+
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.type(screen.getByLabelText('Email'), 'zach@example.com');
+    await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }));
+
+    await user.type(screen.getByLabelText('Code from the email'), '000000');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(screen.getByText(/code has expired or is wrong/)).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Code from the email'));
+    await user.type(screen.getByLabelText('Code from the email'), ' 123 456 ');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(screen.getByText(/^Synced/)).toBeInTheDocument());
+    expect(screen.getByText('zach@example.com')).toBeInTheDocument();
   });
 
   it("doesn't upload this tab's older calendar when another tab saved a newer checkpoint first", async () => {
