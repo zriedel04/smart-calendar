@@ -17,6 +17,8 @@ export interface SyncBackend {
   store(userId: string): CloudStore;
   /** Calls back when another device saves this account's calendar. */
   onRemoteChange(userId: string, callback: (version: number) => void): () => void;
+  /** Fetches a calendar link's .ics text. Rejects with a message to show if it can't. */
+  fetchFeed(url: string): Promise<string>;
 }
 
 /**
@@ -70,6 +72,19 @@ export function supabaseBackend(): SyncBackend {
         create: (data) => store.then((s) => s.create(data)),
         update: (data, version) => store.then((s) => s.update(data, version)),
       };
+    },
+    async fetchFeed(url) {
+      const { db } = await load();
+      const { data, error } = await db.functions.invoke<string>('fetch-feed', { body: { url } });
+      if (!error) return String(data ?? '');
+      // The function's own message says what was wrong with the link.
+      const response = (error as { context?: unknown }).context;
+      if (response instanceof Response) {
+        if (response.status === 404) throw new Error("Calendar links aren't set up for this app yet.");
+        const message = await response.text().catch(() => '');
+        if (message) throw new Error(message);
+      }
+      throw new Error("Couldn't reach the calendar link service. Check your connection and try again.");
     },
     onRemoteChange(userId, callback) {
       return subscribeLater(async () => {

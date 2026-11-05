@@ -137,6 +137,8 @@ describe('hasUserData', () => {
         }),
       ),
     ).toBe(true);
+    const feed = { id: 'f1', url: 'https://example.com/cal.ics', name: 'example.com', estimateMinutes: 60, addedAt: '2026-11-02T16:00:00.000Z' };
+    expect(hasUserData(reducer(empty, { type: 'feed/add', feed }))).toBe(true);
   });
 
   describe('timer', () => {

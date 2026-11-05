@@ -168,5 +168,29 @@ export function parseAppData(json: string): AppData {
       ? { taskId: value.timer.taskId, startedAt: value.timer.startedAt }
       : undefined;
 
-  return { version: 1, tasks, logs, weeklyHours, overrides, events, series, ...(timer ? { timer } : {}) };
+  const feeds = Array.isArray(value.feeds)
+    ? value.feeds.filter(
+        (f): f is NonNullable<AppData['feeds']>[number] =>
+          isRecord(f) &&
+          typeof f.id === 'string' &&
+          typeof f.url === 'string' &&
+          typeof f.name === 'string' &&
+          typeof f.estimateMinutes === 'number' &&
+          f.estimateMinutes > 0 &&
+          typeof f.addedAt === 'string' &&
+          (f.dismissed === undefined || (Array.isArray(f.dismissed) && f.dismissed.every((d) => typeof d === 'string'))),
+      )
+    : [];
+
+  return {
+    version: 1,
+    tasks,
+    logs,
+    weeklyHours,
+    overrides,
+    events,
+    series,
+    ...(timer ? { timer } : {}),
+    ...(feeds.length ? { feeds } : {}),
+  };
 }

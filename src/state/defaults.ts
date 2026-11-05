@@ -92,6 +92,7 @@ export function hasUserData(data: AppData): boolean {
     data.logs.length > 0 ||
     data.events.length > 0 ||
     (data.series?.length ?? 0) > 0 ||
+    (data.feeds?.length ?? 0) > 0 ||
     Object.keys(data.overrides).length > 0 ||
     JSON.stringify(data.weeklyHours) !== JSON.stringify(empty.weeklyHours)
   );

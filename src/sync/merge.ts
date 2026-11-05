@@ -1,5 +1,7 @@
 import { weekdayOf } from '../lib/dates';
 import { copyOf } from '../state/recurring';
+import type { CalendarEvent } from '../lib/availability';
+import { detachFromFeed, dismissKey } from '../state/feeds';
 import type { AppData, Task, TaskSeries } from '../state/types';
 
 /** True if two JSON-like values hold the same data, whatever order their keys are in. */
@@ -188,6 +190,24 @@ function fitCopiesToSeries(base: AppData, data: AppData) {
 }
 
 /**
+ * Calendar links, merged like other items. Deleted items are merged one by one against the base: an
+ * item deleted on either device stays deleted, and one brought back with Undo stays back.
+ */
+function mergeFeeds(base: AppData, local: AppData, remote: AppData) {
+  const dismissedOn = (d: AppData) => new Map((d.feeds ?? []).map((f) => [f.id, new Set(f.dismissed ?? [])]));
+  const [b, l, r] = [dismissedOn(base), dismissedOn(local), dismissedOn(remote)];
+  const withoutDismissed = (d: AppData) => (d.feeds ?? []).map(({ dismissed: _d, ...f }) => f);
+  return mergeById(withoutDismissed(base), withoutDismissed(local), withoutDismissed(remote)).map((f) => {
+    const [bs, ls, rs] = [b.get(f.id), l.get(f.id), r.get(f.id)];
+    const keys = new Set([...(bs ?? []), ...(ls ?? []), ...(rs ?? [])]);
+    const dismissed = [...keys].filter((k) =>
+      pick(bs?.has(k) ?? false, ls?.has(k) ?? rs?.has(k) ?? false, rs?.has(k) ?? ls?.has(k) ?? false),
+    );
+    return dismissed.length ? { ...f, dismissed } : f;
+  });
+}
+
+/**
  * Combines this device's calendar with the one saved in the account.
  *
  * `base` is the version both last agreed on (the last successful sync). Comparing each side with it
@@ -207,6 +227,22 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   };
   const timer = pick(base.timer, local.timer, remote.timer);
   if (timer) merged.timer = timer;
+  const feeds = mergeFeeds(base, local, remote);
+  // A link removed on one device leaves what it added behind, as removing it does there, even if
+  // the other device refreshed those items meanwhile.
+  const feedIds = new Set(feeds.map((f) => f.id));
+  const detach = <T extends Task | CalendarEvent>(item: T): T =>
+    item.feedId && !feedIds.has(item.feedId) ? detachFromFeed(item) : item;
+  merged.tasks = merged.tasks.map(detach);
+  merged.events = merged.events.map(detach);
+  if (feeds.length) {
+    merged.feeds = feeds;
+    // An item from a link deleted on one device stays deleted, even if the other refreshed it meanwhile.
+    const dismissed = new Map(feeds.map((f) => [f.id, new Set('dismissed' in f ? f.dismissed : [])]));
+    const gone = (item: Task | CalendarEvent) => !!item.feedId && !!dismissed.get(item.feedId)?.has(dismissKey(item));
+    merged.tasks = merged.tasks.filter((t) => !gone(t));
+    merged.events = merged.events.filter((e) => !gone(e));
+  }
 
   mergeSkips(base, local, remote, merged);
   keepStartedCopies(base, local, remote, merged);

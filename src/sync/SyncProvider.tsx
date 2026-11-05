@@ -206,6 +206,7 @@ export function SyncProvider({
       postponeConflict: () => setConflictPostponed(true),
       reopenConflict: () => setConflictPostponed(false),
       syncNow: () => void run(),
+      fetchFeed: user ? (url) => backend.fetchFeed(url) : null,
     }),
     [status, user, lastSynced, error, conflict, conflictPostponed, backend, setCheckpoint, run],
   );

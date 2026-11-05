@@ -23,6 +23,8 @@ export interface SyncValue {
   postponeConflict: () => void;
   reopenConflict: () => void;
   syncNow: () => void;
+  /** Fetches a calendar link's .ics text. Null when signed out, since only accounts can use calendar links. */
+  fetchFeed: ((url: string) => Promise<string>) | null;
 }
 
 const noop = () => {};
@@ -41,6 +43,7 @@ export const SyncContext = createContext<SyncValue>({
   postponeConflict: noop,
   reopenConflict: noop,
   syncNow: noop,
+  fetchFeed: null,
 });
 
 export const useSync = () => useContext(SyncContext);

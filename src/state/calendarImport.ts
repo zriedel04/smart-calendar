@@ -17,7 +17,13 @@ export interface ImportRow {
 /** Longest stretch of days a multi-day all-day entry is copied onto. */
 const MAX_SPAN_DAYS = 31;
 
-function lastDate(entry: IcsEntry): ISODate | null {
+/** True once an entry is over: an assignment past its due date, or an event past its last day. */
+export function isPast(entry: IcsEntry, as: 'task' | 'event', today: ISODate): boolean {
+  const end = as === 'task' ? entry.date : lastDate(entry);
+  return end !== null && end < today;
+}
+
+export function lastDate(entry: IcsEntry): ISODate | null {
   // The last occurrence starts on `until`; a multi-day entry runs on past it.
   if (entry.repeat !== 'none') return entry.until ? addDays(entry.until, daysBetween(entry.date, entry.endDate)) : null;
   return entry.endDate;
@@ -35,8 +41,7 @@ export function planImport(entries: readonly IcsEntry[], data: AppData, today: I
     .map((entry): ImportRow => {
       const as: ImportAs = entry.looksLikeAssignment ? 'task' : 'event';
       if (imported.has(entry.uid)) return { entry, as: 'skip', skipReason: 'duplicate' };
-      const end = as === 'task' ? entry.date : lastDate(entry);
-      if (end !== null && end < today) return { entry, as: 'skip', skipReason: 'past' };
+      if (isPast(entry, as, today)) return { entry, as: 'skip', skipReason: 'past' };
       return { entry, as };
     })
     .sort((a, b) => a.entry.date.localeCompare(b.entry.date) || a.entry.start - b.entry.start);

@@ -31,6 +31,7 @@ function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser |
       userListeners.forEach((cb) => cb(null));
     },
     store: () => cloud.store,
+    fetchFeed: async () => 'BEGIN:VCALENDAR\nEND:VCALENDAR',
     onRemoteChange: (_id, cb) => {
       remoteListeners.add(cb);
       return () => remoteListeners.delete(cb);
