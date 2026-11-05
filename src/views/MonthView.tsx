@@ -131,18 +131,19 @@ export function MonthView({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
+      {/* On a phone the switches get their own row under the month, so nothing is squeezed. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <h1 className="mr-auto text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
           {formatDate(month, { month: 'long', year: 'numeric' })}
         </h1>
-        <div className="flex items-center gap-1">
+        <div className="order-last -ml-2 flex w-full items-center gap-1 sm:order-none sm:ml-0 sm:w-auto">
           <button
             type="button"
             role="switch"
             aria-checked={dueOnly}
             onClick={() => setDueOnly(!dueOnly)}
             title={dueOnly ? 'Showing only what is due each day' : 'Showing what is due and the work planned each day'}
-            className="mr-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium whitespace-nowrap text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <Flag className="size-3.5" /> Due dates only {dueOnly ? 'on' : 'off'}
           </button>
@@ -151,7 +152,7 @@ export function MonthView({
             aria-pressed={pickingDays}
             onClick={() => (pickingDays ? stopPickingDays() : setPickingDays(true))}
             className={cx(
-              'mr-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium',
+              'flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium whitespace-nowrap',
               pickingDays
                 ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
                 : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
@@ -159,6 +160,8 @@ export function MonthView({
           >
             <Trash2 className="size-3.5" /> Deletion mode
           </button>
+        </div>
+        <div className="flex items-center gap-1">
           {month !== firstOfMonth(today) && (
             <Button
               size="sm"
@@ -308,11 +311,11 @@ export function MonthView({
       </div>
 
       <Card className="p-2 sm:p-3">
-        <div className="flex items-center justify-between px-2 pt-1 pb-2">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-2 pt-1 pb-2">
+          <h2 className="basis-full text-sm font-semibold text-slate-900 sm:basis-auto dark:text-white">
             {formatDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
           </h2>
-          <div className="flex gap-1">
+          <div className="-ml-2.5 flex flex-wrap gap-1 sm:ml-0">
             {selectedEntries.length > 0 && (
               <Button
                 size="sm"
@@ -320,7 +323,7 @@ export function MonthView({
                 aria-pressed={pickingTasks}
                 onClick={() => (pickingTasks ? stopPickingTasks() : setPickingTasks(true))}
               >
-                <Trash2 className="size-4" /> Delete mode
+                <Trash2 className="hidden size-4 sm:block" /> Delete mode
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={() => onAddEvent(selected)}>
@@ -462,7 +465,7 @@ export function MonthView({
                   stopPickingTasks();
                 }}
               >
-                <Trash2 className="size-4" /> Delete {pickedTasks.size || ''} selected
+                <Trash2 className="hidden size-4 sm:block" /> Delete {pickedTasks.size || ''} selected
               </Button>
             </span>
           </div>

@@ -269,7 +269,7 @@ function DangerZone() {
           }
         >
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            This deletes {counts.join(', ')}
+            This deletes {counts.length > 1 ? `${counts.slice(0, -1).join(', ')} and ${counts.at(-1)}` : counts[0]}
             {email ? ', on every device signed in to your account' : ''}. You can undo it right after, but not later.
           </p>
           <label htmlFor="confirm-delete" className="mt-4 mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
