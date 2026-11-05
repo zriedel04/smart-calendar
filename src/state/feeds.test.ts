@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseIcs, type IcsEntry } from '../lib/ics';
 import { mergeAppData } from '../sync/merge';
 import { createEmptyData } from './defaults';
@@ -198,13 +198,12 @@ describe('calendar links', () => {
   it('adds a repeating event once when devices in different time zones refresh the link', () => {
     const ics = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:late-lab', 'SUMMARY:Late lab', 'DTSTART:20261106T003000Z', 'DTEND:20261106T013000Z',
       'RRULE:FREQ=WEEKLY;COUNT=4', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-    const zone = process.env.TZ;
     const readIn = (tz: string) => {
-      process.env.TZ = tz;
+      vi.stubEnv('TZ', tz);
       try {
         return parseIcs(ics, new Date('2026-11-02T16:00:00Z'));
       } finally {
-        process.env.TZ = zone;
+        vi.unstubAllEnvs();
       }
     };
     const [utc, la] = [readIn('UTC'), readIn('America/Los_Angeles')];
