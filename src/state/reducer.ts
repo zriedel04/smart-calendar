@@ -319,10 +319,13 @@ function apply(state: AppData, action: Action): AppData {
     case 'task/deleteMany':
       // Each goes the way deleting it on its own would: a day of a repeating task is skipped, so
       // the series doesn't make it again, and an item from a calendar link is remembered as deleted.
+      // A skipped day with logged time would be kept as finished, so its time goes too: asked to
+      // delete it, the day should be gone (Undo brings it back).
       return action.ids.reduce((next, id) => {
         const task = next.tasks.find((t) => t.id === id);
         if (!task) return next;
-        return reducer(next, task.seriesId ? { type: 'task/skip', id } : { type: 'task/delete', id });
+        if (!task.seriesId) return reducer(next, { type: 'task/delete', id });
+        return reducer({ ...next, logs: next.logs.filter((l) => l.taskId !== id) }, { type: 'task/skip', id });
       }, state);
     case 'data/clear':
       // Everything goes except your weekly work hours.

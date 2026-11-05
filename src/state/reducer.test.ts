@@ -19,11 +19,15 @@ describe('reducer', () => {
         { id: 'a', title: 'Essay', dueDate: '2026-11-10', estimateMinutes: 60, createdAt: '' },
         { id: 'b', title: 'Lab', dueDate: '2026-11-11', estimateMinutes: 60, createdAt: '' },
         { id: 's1@2026-11-03', seriesId: 's1', title: 'Flashcards', dueDate: '2026-11-03', estimateMinutes: 30, createdAt: '' },
+        { id: 's1@2026-11-04', seriesId: 's1', title: 'Flashcards', dueDate: '2026-11-04', estimateMinutes: 30, createdAt: '' },
       ],
+      // Time logged on a day still goes when that day is deleted.
+      logs: [{ id: 'l1', taskId: 's1@2026-11-04', date: '2026-11-04', minutes: 10 }],
     };
-    state = reducer(state, { type: 'task/deleteMany', ids: ['a', 's1@2026-11-03', 'missing'] });
+    state = reducer(state, { type: 'task/deleteMany', ids: ['a', 's1@2026-11-03', 's1@2026-11-04', 'missing'] });
     expect(state.tasks.map((t) => t.id)).toEqual(['b']);
-    expect(state.series![0]!.skipped).toEqual(['2026-11-03']);
+    expect(state.logs).toEqual([]);
+    expect(state.series![0]!.skipped).toEqual(['2026-11-03', '2026-11-04']);
   });
 
   it('clears the whole calendar but keeps weekly hours', () => {
