@@ -8,7 +8,7 @@ import { StoreProvider } from '../state/StoreProvider';
 import type { SyncBackend, SyncUser } from './backend';
 import type { SyncState } from './engine';
 import { memoryStore } from './memoryStore';
-import { errorMessage, signInErrorMessage } from './errors';
+import { errorMessage, passwordErrorMessage, signInErrorMessage } from './errors';
 import { SyncProvider } from './SyncProvider';
 
 function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser | null = null) {
@@ -16,6 +16,7 @@ function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser |
   const userListeners = new Set<(u: SyncUser | null) => void>();
   const remoteListeners = new Set<(version: number) => void>();
   const sent: string[] = [];
+  const passwords = new Map<string, string>();
   const backend: SyncBackend = {
     currentUser: async () => user,
     onUserChange: (cb) => {
@@ -26,10 +27,19 @@ function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser |
       sent.push(email);
       return null;
     },
-    verifyCode: async (email, code) => {
-      if (code !== '123456') return 'That code has expired or is wrong. Check the newest email, or send a new one.';
-      user = { id: 'code-user', email };
+    signInWithPassword: async (email, password) => {
+      if (passwords.get(email) !== password) return 'Wrong email or password.';
+      user = { id: `user-${email}`, email };
       userListeners.forEach((cb) => cb(user));
+      return null;
+    },
+    signUp: async (email, password) => {
+      if (passwords.has(email)) return 'That email already has an account.';
+      passwords.set(email, password);
+      return 'confirm';
+    },
+    setPassword: async (password) => {
+      if (user?.email) passwords.set(user.email, password);
       return null;
     },
     signOut: async () => {
@@ -95,7 +105,7 @@ describe('Sync across devices', () => {
     await user.type(screen.getByLabelText('Email'), 'zach@example.com');
     await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }));
     expect(fake.sent).toEqual(['zach@example.com']);
-    expect(screen.getByText(/Open the sign-in link/)).toBeInTheDocument();
+    expect(screen.getByText(/Open the sign-in link in this browser/)).toBeInTheDocument();
 
     // Opening the link finishes signing in, and this device's calendar becomes the account's.
     fake.finishSignIn(ME);
@@ -126,24 +136,38 @@ describe('Sync across devices', () => {
     expect(taskTitles(JSON.parse(localStorage.getItem(STORAGE_KEY)!))).toContain('Added on the laptop');
   });
 
-  it('signs in with the code from the email, for when the link opens in another browser', async () => {
+  it('makes an account with a password, signs in with it, and sets a new one', async () => {
     const user = userEvent.setup();
     const fake = fakeBackend(memoryStore());
     renderWithSync(fake.backend);
 
     await user.click(screen.getByRole('button', { name: 'Schedule' }));
     await user.type(screen.getByLabelText('Email'), 'zach@example.com');
-    await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }));
+    await user.type(screen.getByLabelText('Password'), 'first-pass');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(screen.getByText(/confirm your account/)).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Code from the email'), '000000');
+    await user.clear(screen.getByLabelText('Password'));
+    await user.type(screen.getByLabelText('Password'), 'wrong');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(screen.getByText(/code has expired or is wrong/)).toBeInTheDocument();
+    expect(screen.getByText('Wrong email or password.')).toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText('Code from the email'));
-    await user.type(screen.getByLabelText('Code from the email'), ' 123 456 ');
+    await user.clear(screen.getByLabelText('Password'));
+    await user.type(screen.getByLabelText('Password'), 'first-pass');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(screen.getByText(/^Synced/)).toBeInTheDocument());
-    expect(screen.getByText('zach@example.com')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Set a password' }));
+    await user.type(screen.getByLabelText('New password'), 'second-pass');
+    await user.click(screen.getByRole('button', { name: 'Save password' }));
+    expect(screen.getByText(/Password saved/)).toBeInTheDocument();
+
+    // Signing out keeps the email filled in.
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(screen.getByLabelText('Email')).toHaveValue('zach@example.com');
+    await user.type(screen.getByLabelText('Password'), 'second-pass');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(screen.getByText(/^Synced/)).toBeInTheDocument());
   });
 
   it("doesn't upload this tab's older calendar when another tab saved a newer checkpoint first", async () => {
@@ -290,6 +314,14 @@ describe('errorMessage', () => {
     );
     expect(errorMessage(new Error('Failed to fetch'))).toBe('Failed to fetch');
     expect(errorMessage(undefined)).toBe("Couldn't reach your account.");
+  });
+});
+
+describe('passwordErrorMessage', () => {
+  it('explains a wrong password, including for accounts made with email links', () => {
+    expect(passwordErrorMessage({ message: 'Invalid login credentials', code: 'invalid_credentials', status: 400 })).toMatch(/^Wrong email or password/);
+    expect(passwordErrorMessage({ message: 'User already registered', code: 'user_already_exists' })).toMatch(/already has an account/);
+    expect(passwordErrorMessage({ message: 'Email not confirmed', code: 'email_not_confirmed' })).toMatch(/^Confirm your email/);
   });
 });
 
