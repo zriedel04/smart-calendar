@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const SHOW_TIMES_KEY = 'smart-calendar:show-times';
+const DUE_ONLY_KEY = 'smart-calendar:month-due-only';
 
 function read(key: string): string | null {
   try {
@@ -26,6 +27,19 @@ export function useShowTimes(): [boolean, (next: boolean) => void] {
     write(SHOW_TIMES_KEY, next ? 'on' : 'off');
   };
   return [show, update];
+}
+
+/**
+ * Whether the month calendar shows only what's due, like a school calendar, instead of also the
+ * work planned each day. Off unless you turn it on; kept per device.
+ */
+export function useDueDatesOnly(): [boolean, (next: boolean) => void] {
+  const [dueOnly, setDueOnly] = useState(() => read(DUE_ONLY_KEY) === 'on');
+  const update = (next: boolean) => {
+    setDueOnly(next);
+    write(DUE_ONLY_KEY, next ? 'on' : 'off');
+  };
+  return [dueOnly, update];
 }
 
 /** Minutes since midnight, updated every minute. */

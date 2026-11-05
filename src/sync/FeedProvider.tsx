@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../lib/dates';
-import { parseIcs } from '../lib/ics';
+import { parseIcs, type IcsEntry } from '../lib/ics';
 import { useStore } from '../state/context';
 import { FEED_REFRESH_MS, feedName, normalizeFeedUrl } from '../state/feeds';
 import { createId } from '../state/ids';
@@ -28,6 +28,8 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
     statusRef.current = status;
   });
   const inFlight = useRef(new Set<string>());
+  // Each link's latest copy on this device, so hiding a course takes effect without fetching again.
+  const lastEntries = useRef(new Map<string, IcsEntry[]>());
 
   const record = useCallback(
     (feedId: string, next: FeedStatus) => {
@@ -47,6 +49,7 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
       setRefreshing(new Set(inFlight.current));
       try {
         const entries = parseIcs(await fetchFeed(feed.url));
+        lastEntries.current.set(feed.id, entries);
         dispatch({ type: 'feed/apply', id: feed.id, entries, today: localToday(), at: new Date().toISOString() });
         record(feed.id, { at: Date.now() });
       } catch (e) {
@@ -101,6 +104,7 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
         }
         const entries = parseIcs(text);
         const feed: CalendarFeed = { id: createId(), url, name: feedName(url), estimateMinutes, addedAt: new Date().toISOString() };
+        lastEntries.current.set(feed.id, entries);
         dispatch({ type: 'feed/add', feed });
         dispatch({ type: 'feed/apply', id: feed.id, entries, today: localToday(), at: new Date().toISOString() });
         record(feed.id, { at: Date.now() });
@@ -109,6 +113,15 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
       refresh(feedId) {
         const feed = feedsRef.current.find((f) => f.id === feedId);
         if (feed) void refreshFeed(feed);
+      },
+      setCourseHidden(feedId, course, hidden) {
+        dispatch({ type: 'feed/hideCourse', id: feedId, course, hidden });
+        const entries = lastEntries.current.get(feedId);
+        if (entries) dispatch({ type: 'feed/apply', id: feedId, entries, today: localToday(), at: new Date().toISOString() });
+        else {
+          const feed = feedsRef.current.find((f) => f.id === feedId);
+          if (feed) void refreshFeed(feed);
+        }
       },
     }),
     [fetchFeed, status, refreshing, dispatch, record, refreshFeed],

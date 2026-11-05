@@ -83,6 +83,10 @@ export interface CalendarFeed {
   addedAt: string;
   /** Items from this link you deleted, so refreshing doesn't bring them back. */
   dismissed?: string[];
+  /** The courses this link's entries belong to, as of its last refresh, such as "CSE 485". */
+  courses?: string[];
+  /** Courses whose entries you don't want from this link. */
+  hiddenCourses?: string[];
 }
 
 export interface RunningTimer {

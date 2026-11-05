@@ -28,6 +28,21 @@ export interface IcsEntry {
    * device reads the same way, unlike `date`.
    */
   sourceDate?: ISODate;
+  /** The course a school calendar entry belongs to, such as "CSE 485", when its title names one. */
+  course?: string;
+}
+
+/**
+ * Canvas ends every title with the course section in brackets, such as
+ * "Sprint 4 Peer Review [2026FallC-T-CSE485-CSE423-60367-…]". That becomes the course code alone,
+ * "Sprint 4 Peer Review · CSE 485", with the code kept as the entry's course. Other titles are left as they are.
+ */
+export function splitCourse(title: string): { title: string; course?: string } {
+  const match = /^(.*\S)\s*\[([^\]]*)\]$/.exec(title);
+  const code = match && /(?:^|[^A-Za-z])([A-Z]{2,4})[ -]?(\d{3}[A-Z]?)(?!\d)/.exec(match[2]!);
+  if (!match || !code) return { title };
+  const course = `${code[1]} ${code[2]}`;
+  return { title: `${match[1]} · ${course}`, course };
 }
 
 interface Property {
@@ -227,7 +242,7 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
   }
 
   const uid = get('UID')?.value.trim() || `${start.date}-${get('SUMMARY')?.value ?? ''}`;
-  const title = unescapeText(get('SUMMARY')?.value ?? '') || 'Untitled';
+  const { title, course } = splitCourse(unescapeText(get('SUMMARY')?.value ?? '') || 'Untitled');
   const url = get('URL')?.value ?? '';
   const looksLikeAssignment =
     /assignment/i.test(uid) || /assignment/i.test(url) || (!allDay && endMinutes === startMinutes);
@@ -242,6 +257,7 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
     end: endMinutes,
     repeat: 'none',
     looksLikeAssignment,
+    ...(course ? { course } : {}),
     sourceDate: `${startProp.value.slice(0, 4)}-${startProp.value.slice(4, 6)}-${startProp.value.slice(6, 8)}`,
   };
 
