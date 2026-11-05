@@ -34,6 +34,12 @@ export function undoLabel(action: Action, before: AppData): string | null {
       return before.timer ? `Stopped the timer on "${task(before.timer.taskId)}" without logging` : null;
     case 'event/delete':
       return `Deleted "${before.events.find((e) => e.id === action.id)?.title ?? 'event'}"`;
+    case 'task/deleteMany': {
+      const count = action.ids.filter((id) => before.tasks.some((t) => t.id === id)).length;
+      return count === 1 ? `Deleted "${task(action.ids.find((id) => before.tasks.some((t) => t.id === id))!)}"` : count ? `Deleted ${count} tasks` : null;
+    }
+    case 'data/clear':
+      return 'Deleted your calendar';
     case 'feed/remove':
       return `Removed the ${before.feeds?.find((f) => f.id === action.id)?.name ?? 'calendar'} link`;
     case 'series/stop':

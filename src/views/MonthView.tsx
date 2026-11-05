@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, Flag, Plus } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Flag, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { eventKind, eventsOn, type CalendarEvent } from '../lib/availability';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
@@ -42,17 +42,46 @@ export function MonthView({
   onEditDay,
   onEditEvent,
   onAddEvent,
+  onSelectDay,
 }: {
   plan: Plan;
   onEditTask: (task: Task) => void;
   onEditDay: (date: ISODate) => void;
   onEditEvent: (event: CalendarEvent) => void;
   onAddEvent: (date: ISODate) => void;
+  /** Tells the app which day is picked, so its Event and Task buttons use that day. */
+  onSelectDay?: (date: ISODate) => void;
 }) {
   const { data, dispatch } = useStore();
   const { today } = plan;
   const [month, setMonth] = useState(() => firstOfMonth(today));
-  const [selected, setSelected] = useState<ISODate>(today);
+  const [selected, setSelectedDay] = useState<ISODate>(today);
+  // Deleting days: pick days on the calendar, then delete everything due on them.
+  const [pickingDays, setPickingDays] = useState(false);
+  const [pickedDays, setPickedDays] = useState<ReadonlySet<ISODate>>(new Set());
+  // Deleting tasks: pick tasks in the selected day's list, then delete them.
+  const [pickingTasks, setPickingTasks] = useState(false);
+  const [pickedTasks, setPickedTasks] = useState<ReadonlySet<string>>(new Set());
+  const setSelected = (date: ISODate) => {
+    setSelectedDay(date);
+    setPickedTasks(new Set());
+    onSelectDay?.(date);
+  };
+  const toggleIn = <T,>(set: ReadonlySet<T>, item: T): Set<T> => {
+    const next = new Set(set);
+    if (next.has(item)) next.delete(item);
+    else next.add(item);
+    return next;
+  };
+  const dueOnPicked = data.tasks.filter((t) => pickedDays.has(t.dueDate));
+  const stopPickingDays = () => {
+    setPickingDays(false);
+    setPickedDays(new Set());
+  };
+  const stopPickingTasks = () => {
+    setPickingTasks(false);
+    setPickedTasks(new Set());
+  };
   const [dueOnly, setDueOnly] = useDueDatesOnly();
 
   const tasksById = useMemo(() => new Map(data.tasks.map((t) => [t.id, t])), [data.tasks]);
@@ -117,6 +146,19 @@ export function MonthView({
           >
             <Flag className="size-3.5" /> Due dates only {dueOnly ? 'on' : 'off'}
           </button>
+          <button
+            type="button"
+            aria-pressed={pickingDays}
+            onClick={() => (pickingDays ? stopPickingDays() : setPickingDays(true))}
+            className={cx(
+              'mr-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium',
+              pickingDays
+                ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
+                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200',
+            )}
+          >
+            <Trash2 className="size-3.5" /> Deletion mode
+          </button>
           {month !== firstOfMonth(today) && (
             <Button
               size="sm"
@@ -137,6 +179,32 @@ export function MonthView({
           </Button>
         </div>
       </div>
+
+      {pickingDays && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+          <span>
+            {pickedDays.size === 0
+              ? 'Pick the days to clear. Everything due on them will be deleted.'
+              : `${dueOnPicked.length} ${dueOnPicked.length === 1 ? 'task' : 'tasks'} due on ${pickedDays.size} ${pickedDays.size === 1 ? 'day' : 'days'}`}
+          </span>
+          <span className="flex gap-1">
+            <Button size="sm" variant="ghost" onClick={stopPickingDays}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={dueOnPicked.length === 0}
+              onClick={() => {
+                dispatch({ type: 'task/deleteMany', ids: dueOnPicked.map((t) => t.id) });
+                stopPickingDays();
+              }}
+            >
+              <Trash2 className="size-4" /> Delete {dueOnPicked.length || ''} {dueOnPicked.length === 1 ? 'task' : 'tasks'}
+            </Button>
+          </span>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
@@ -159,13 +227,19 @@ export function MonthView({
               <button
                 key={date}
                 type="button"
-                onClick={() => setSelected(date)}
+                onClick={() => (pickingDays ? setPickedDays(toggleIn(pickedDays, date)) : setSelected(date))}
                 aria-label={formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' })}
-                aria-pressed={selected === date}
+                aria-pressed={pickingDays ? pickedDays.has(date) : selected === date}
                 className={cx(
                   'flex min-h-16 flex-col gap-0.5 border-r border-b border-slate-100 p-1 text-left align-top transition-colors sm:min-h-28 sm:p-1.5 dark:border-slate-800',
                   !inMonth && 'bg-slate-50/60 dark:bg-slate-950/40',
-                  selected === date ? 'bg-indigo-50/70 dark:bg-indigo-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+                  pickingDays
+                    ? pickedDays.has(date)
+                      ? 'bg-rose-100 ring-2 ring-rose-400 ring-inset dark:bg-rose-500/20'
+                      : 'hover:bg-rose-50 dark:hover:bg-rose-500/10'
+                    : selected === date
+                      ? 'bg-indigo-50/70 dark:bg-indigo-500/10'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
                 )}
               >
                 <span
@@ -239,6 +313,16 @@ export function MonthView({
             {formatDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
           </h2>
           <div className="flex gap-1">
+            {selectedEntries.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-pressed={pickingTasks}
+                onClick={() => (pickingTasks ? stopPickingTasks() : setPickingTasks(true))}
+              >
+                <Trash2 className="size-4" /> Delete mode
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={() => onAddEvent(selected)}>
               <Plus className="size-4" /> Event
             </Button>
@@ -286,7 +370,23 @@ export function MonthView({
               };
               return (
                 <li key={e.key} className="flex items-center gap-3 px-2 py-2.5">
-                  {canTick || canToggleDue ? (
+                  {pickingTasks ? (
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={pickedTasks.has(e.task.id)}
+                      aria-label={`Select "${e.task.title}"`}
+                      onClick={() => setPickedTasks(toggleIn(pickedTasks, e.task.id))}
+                      className={cx(
+                        'flex size-5 shrink-0 items-center justify-center rounded border-2',
+                        pickedTasks.has(e.task.id)
+                          ? 'border-rose-500 bg-rose-500 text-white'
+                          : 'border-slate-300 text-transparent hover:border-rose-500 dark:border-slate-600',
+                      )}
+                    >
+                      <Check className="size-3" strokeWidth={3} />
+                    </button>
+                  ) : canTick || canToggleDue ? (
                     <button
                       type="button"
                       role="checkbox"
@@ -313,7 +413,11 @@ export function MonthView({
                   ) : (
                     <span className={cx('ml-1.5 size-2 shrink-0 rounded-full', e.done ? 'bg-emerald-500' : PRIORITY_DOT[e.priority])} />
                   )}
-                  <button type="button" onClick={() => onEditTask(e.task)} className="min-w-0 flex-1 text-left">
+                  <button
+                    type="button"
+                    onClick={() => (pickingTasks ? setPickedTasks(toggleIn(pickedTasks, e.task.id)) : onEditTask(e.task))}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <p
                       className={cx(
                         'truncate text-sm font-medium',
@@ -335,6 +439,33 @@ export function MonthView({
               );
             })}
           </ul>
+        )}
+        {pickingTasks && selectedEntries.length > 0 && (
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-2 pt-3 pb-1 dark:border-slate-800">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setPickedTasks(new Set(selectedEntries.map((e) => e.task.id)))}
+            >
+              Select all
+            </Button>
+            <span className="flex gap-1">
+              <Button size="sm" variant="ghost" onClick={stopPickingTasks}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={pickedTasks.size === 0}
+                onClick={() => {
+                  dispatch({ type: 'task/deleteMany', ids: [...pickedTasks] });
+                  stopPickingTasks();
+                }}
+              >
+                <Trash2 className="size-4" /> Delete {pickedTasks.size || ''} selected
+              </Button>
+            </span>
+          </div>
         )}
       </Card>
     </div>

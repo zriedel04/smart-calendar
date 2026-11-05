@@ -387,6 +387,82 @@ describe('App', () => {
     expect(saved).toMatchObject({ date: '2026-11-12', kind: 'birthday', allDay: true, repeat: 'yearly', blocksWork: false });
   });
 
+  it('deletes picked tasks from a day in delete mode, and can undo it', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Wednesday, November 4' }));
+    await user.click(screen.getByRole('button', { name: 'Delete mode' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select "Algorithms problem set 6"' }));
+    await user.click(screen.getByRole('button', { name: /Delete 1 selected/ }));
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.tasks.map((t: { title: string }) => t.title)).not.toContain('Algorithms problem set 6');
+    expect(screen.getByText('Deleted "Algorithms problem set 6"')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks.map((t: { title: string }) => t.title)).toContain('Algorithms problem set 6');
+  });
+
+  it('deletes every task due on the days picked in deletion mode', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: /Deletion mode/ }));
+    await user.click(screen.getByRole('button', { name: 'Wednesday, November 4' }));
+    await user.click(screen.getByRole('button', { name: 'Friday, November 6' }));
+    // Their daily flashcard copies are due those days too.
+    expect(screen.getByText('4 tasks due on 2 days')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Delete 4 tasks/ }));
+
+    const titles = JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks.map((t: { title: string }) => t.title);
+    expect(titles).not.toContain('Algorithms problem set 6');
+    expect(titles).not.toContain('Database systems lab report');
+    expect(titles).toContain('Reply to internship recruiter');
+  });
+
+  it('deletes the whole calendar only after typing delete, keeping work hours', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.click(screen.getByRole('button', { name: /Delete my calendar/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete your whole calendar?' });
+    const confirm = within(dialog).getByRole('button', { name: 'Delete everything' });
+    expect(confirm).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('Type delete to confirm'), 'delet');
+    expect(confirm).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('Type delete to confirm'), 'e');
+    expect(within(dialog).getByLabelText('Type delete to confirm')).toHaveValue('delete');
+    expect(confirm).toBeEnabled();
+    await user.click(confirm);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.tasks).toEqual([]);
+    expect(saved.events).toEqual([]);
+    expect(saved.series).toEqual([]);
+    expect(saved.weeklyHours[1]).toEqual([{ start: 12 * 60, end: 18 * 60 }]);
+  });
+
+  it('uses the day picked on the month calendar for the add buttons at the top', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Previous month' }));
+    await user.click(screen.getByRole('button', { name: 'Wednesday, October 28' }));
+
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add to your calendar' });
+    expect(within(dialog).getByLabelText('Date')).toHaveValue('2026-10-28');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(screen.getByRole('button', { name: 'Add task' }));
+    dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Due date')).toHaveValue('2026-10-28');
+  });
+
   it('imports Canvas assignments as tasks and other entries as events, once', async () => {
     const user = userEvent.setup();
     renderApp();

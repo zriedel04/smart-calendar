@@ -3,10 +3,37 @@ import { createEmptyData, hasUserData } from './defaults';
 import { planFor } from './planner';
 import { reducer } from './reducer';
 import { parseAppData } from './storage';
+import type { Weekday } from '../lib/dates';
+import type { AppData } from './types';
 
 const draft = { title: 'Essay', dueDate: '2026-11-10', estimateMinutes: 120 };
 
 describe('reducer', () => {
+  it('deletes several tasks at once, skipping a repeating task only on its day', () => {
+    const base = createEmptyData();
+    const series = { id: 's1', title: 'Flashcards', estimateMinutes: 30, days: [1, 2, 3, 4, 5] as Weekday[], startDate: '2026-11-02', createdAt: '' };
+    let state: AppData = {
+      ...base,
+      series: [series],
+      tasks: [
+        { id: 'a', title: 'Essay', dueDate: '2026-11-10', estimateMinutes: 60, createdAt: '' },
+        { id: 'b', title: 'Lab', dueDate: '2026-11-11', estimateMinutes: 60, createdAt: '' },
+        { id: 's1@2026-11-03', seriesId: 's1', title: 'Flashcards', dueDate: '2026-11-03', estimateMinutes: 30, createdAt: '' },
+      ],
+    };
+    state = reducer(state, { type: 'task/deleteMany', ids: ['a', 's1@2026-11-03', 'missing'] });
+    expect(state.tasks.map((t) => t.id)).toEqual(['b']);
+    expect(state.series![0]!.skipped).toEqual(['2026-11-03']);
+  });
+
+  it('clears the whole calendar but keeps weekly hours', () => {
+    let state = reducer(createEmptyData(), { type: 'task/add', draft });
+    state = { ...state, weeklyHours: [[], [{ start: 540, end: 600 }], [], [], [], [], []] };
+    const cleared = reducer(state, { type: 'data/clear' });
+    expect(cleared.tasks).toEqual([]);
+    expect(cleared.weeklyHours).toEqual(state.weeklyHours);
+  });
+
   it('adds, edits and deletes tasks along with their logged time', () => {
     let state = reducer(createEmptyData(), { type: 'task/add', draft });
     const id = state.tasks[0]!.id;

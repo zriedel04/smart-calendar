@@ -34,7 +34,7 @@ const TABS: { id: Tab; label: string; icon: ComponentType<{ className?: string }
 ];
 
 type Dialog =
-  | { kind: 'task'; task?: Task; series?: TaskSeries }
+  | { kind: 'task'; task?: Task; series?: TaskSeries; due?: ISODate }
   | { kind: 'bulk' }
   | { kind: 'day'; date?: ISODate }
   | { kind: 'event'; event?: CalendarEvent; date?: ISODate }
@@ -64,14 +64,17 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // The day picked on the month calendar, which the Event and Task buttons above use while it's shown.
+  const [monthDay, setMonthDay] = useState<ISODate | null>(null);
   const go = (next: Tab) => {
     setTab(next);
+    setMonthDay(null);
     window.history.replaceState(null, '', `#${next}`);
     window.scrollTo({ top: 0 });
   };
 
   const close = useCallback(() => setDialog(null), []);
-  const addTask = () => setDialog({ kind: 'task' });
+  const addTask = () => setDialog({ kind: 'task', ...(tab === 'month' && monthDay ? { due: monthDay } : {}) });
   const addMany = () => setDialog({ kind: 'bulk' });
   const editTask = (task: Task) => setDialog({ kind: 'task', task });
   const editSeries = (series: TaskSeries) => setDialog({ kind: 'task', series });
@@ -96,7 +99,11 @@ export default function App() {
             <span className="font-semibold tracking-tight">Smart Calendar</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => editEvent()} aria-label="Add event">
+            <Button
+              size="sm"
+              onClick={() => (tab === 'month' && monthDay ? addEventOn(monthDay) : editEvent())}
+              aria-label="Add event"
+            >
               <CalendarPlus className="size-4" /> Event
             </Button>
             <Button size="sm" variant="primary" onClick={addTask} aria-label="Add task">
@@ -142,7 +149,14 @@ export default function App() {
         )}
         {tab === 'week' && <WeekView plan={plan} onEditDay={editDay} onEditTask={editTask} />}
         {tab === 'month' && (
-          <MonthView plan={plan} onEditTask={editTask} onEditDay={editDay} onEditEvent={editEvent} onAddEvent={addEventOn} />
+          <MonthView
+            plan={plan}
+            onEditTask={editTask}
+            onEditDay={editDay}
+            onEditEvent={editEvent}
+            onAddEvent={addEventOn}
+            onSelectDay={setMonthDay}
+          />
         )}
         {tab === 'tasks' && (
           <TasksView plan={plan} onAddTask={addTask} onAddMany={addMany} onImport={importCalendar} onEditTask={editTask} onEditSeries={editSeries} />
@@ -159,7 +173,7 @@ export default function App() {
       </main>
 
 
-      {dialog?.kind === 'task' && <TaskForm task={dialog.task} series={dialog.series} today={today} onClose={close} onAddMany={addMany} />}
+      {dialog?.kind === 'task' && <TaskForm task={dialog.task} series={dialog.series} defaultDue={dialog.due} today={today} onClose={close} onAddMany={addMany} />}
       {dialog?.kind === 'bulk' && <BulkTaskForm today={today} onClose={close} />}
       {dialog?.kind === 'day' && <DayHoursDialog date={dialog.date} today={today} onClose={close} />}
       {dialog?.kind === 'event' && (
