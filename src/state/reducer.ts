@@ -39,6 +39,7 @@ export type Action =
   | { type: 'series/fill'; today: ISODate }
   | { type: 'feed/add'; feed: CalendarFeed }
   | { type: 'feed/remove'; id: string }
+  | { type: 'feed/hideCourse'; id: string; course: string; hidden: boolean }
   | { type: 'feed/apply'; id: string; entries: IcsEntry[]; today: ISODate; at: string }
   | { type: 'data/replace'; data: AppData };
 
@@ -292,6 +293,17 @@ function apply(state: AppData, action: Action): AppData {
       return fillSeries(state, action.today);
     case 'feed/add':
       return { ...state, feeds: [...(state.feeds ?? []), action.feed] };
+    case 'feed/hideCourse': {
+      // Takes effect on the link's next refresh, which drops or brings back that course's entries.
+      const feeds = (state.feeds ?? []).map((f) => {
+        if (f.id !== action.id) return f;
+        const others = (f.hiddenCourses ?? []).filter((c) => c !== action.course);
+        const hiddenCourses = action.hidden ? [...others, action.course].sort() : others;
+        const { hiddenCourses: _old, ...rest } = f;
+        return hiddenCourses.length ? { ...rest, hiddenCourses } : rest;
+      });
+      return { ...state, feeds };
+    }
     case 'feed/remove': {
       // What the link added stays, as if imported from a file, but is no longer kept up to date.
       const detach = <T extends Task | CalendarEvent>(item: T): T => (item.feedId === action.id ? detachFromFeed(item) : item);

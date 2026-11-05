@@ -70,8 +70,81 @@ describe('Calendar links', () => {
     await waitFor(() => expect(within(card).getByText('Canvas')).toBeInTheDocument());
     expect(within(card).getByText('Updated just now')).toBeInTheDocument();
     expect(fetchFeed).toHaveBeenCalledWith(LINK);
-    const essay = stored().tasks.find((t) => t.title === 'Essay 2 [ENG 102]');
+    const essay = stored().tasks.find((t) => t.title === 'Essay 2 · ENG 102');
     expect(essay).toMatchObject({ dueDate: '2026-11-06', estimateMinutes: 120 });
+  });
+
+  it("hides a course's assignments right away and brings them back", async () => {
+    const user = userEvent.setup();
+    const { fetchFeed } = setup(ME, async () =>
+      calendar(
+        assignment('1', 'Sprint report [2026FallC-T-CSE485-60367]', '20261107T065900Z'),
+        assignment('2', 'Section 5.4 [2026FallC-T-MAT343-71234]', '20261107T065900Z'),
+      ),
+    );
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    const card = (await screen.findByRole('heading', { name: 'Calendar links' })).closest('section')!;
+    await user.type(within(card).getByLabelText('Calendar link'), LINK);
+    await user.click(within(card).getByRole('button', { name: 'Add link' }));
+    const math = await within(card).findByRole('button', { name: 'MAT 343' });
+    expect(math).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(math);
+    expect(within(card).getByRole('button', { name: 'MAT 343' })).toHaveAttribute('aria-pressed', 'false');
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(false));
+    expect(stored().tasks.some((t) => t.title === 'Sprint report · CSE 485')).toBe(true);
+    await user.click(within(card).getByRole('button', { name: 'MAT 343' }));
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(true));
+    // Each change fetches the link's latest copy rather than replaying an older one.
+    expect(fetchFeed).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps a hidden course on offer when the link has nothing else', async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    data.feeds = [
+      {
+        id: 'f1',
+        url: LINK,
+        name: 'Canvas',
+        estimateMinutes: 60,
+        addedAt: '2026-10-01T00:00:00.000Z',
+        courses: ['MAT 343'],
+        hiddenCourses: ['MAT 343'],
+      },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setup(ME, async () => calendar(assignment('2', 'Section 5.4 [2026FallC-T-MAT343-71234]', '20261107T065900Z')), {
+      f1: { at: Date.now() },
+    });
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    const card = (await screen.findByRole('heading', { name: 'Calendar links' })).closest('section')!;
+    const math = await within(card).findByRole('button', { name: 'MAT 343' });
+    expect(math).toHaveAttribute('aria-pressed', 'false');
+    await user.click(math);
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(true));
+  });
+
+  it("doesn't undo assignments another device brought in when hiding a course", async () => {
+    const user = userEvent.setup();
+    let copy = calendar(
+      assignment('1', 'Sprint report [2026FallC-T-CSE485-60367]', '20261107T065900Z'),
+      assignment('2', 'Section 5.4 [2026FallC-T-MAT343-71234]', '20261107T065900Z'),
+    );
+    setup(ME, async () => copy);
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    const card = (await screen.findByRole('heading', { name: 'Calendar links' })).closest('section')!;
+    await user.type(within(card).getByLabelText('Calendar link'), LINK);
+    await user.click(within(card).getByRole('button', { name: 'Add link' }));
+    // Canvas adds an assignment, which another device brings in and syncs here.
+    copy = calendar(
+      assignment('1', 'Sprint report [2026FallC-T-CSE485-60367]', '20261107T065900Z'),
+      assignment('3', 'Peer review [2026FallC-T-CSE485-60367]', '20261108T065900Z'),
+      assignment('2', 'Section 5.4 [2026FallC-T-MAT343-71234]', '20261107T065900Z'),
+    );
+    await user.click(await within(card).findByRole('button', { name: 'MAT 343' }));
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(false));
+    expect(stored().tasks.some((t) => t.title === 'Peer review · CSE 485')).toBe(true);
   });
 
   it("shows why a link couldn't be added", async () => {

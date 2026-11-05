@@ -1,6 +1,7 @@
 import { Link2, RefreshCw, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useStore } from '../state/context';
+import type { CalendarFeed } from '../state/types';
 import { useSync } from '../sync/context';
 import { useFeeds, type FeedStatus } from '../sync/feedContext';
 import { cx } from './cx';
@@ -14,6 +15,15 @@ function statusText(status: FeedStatus | undefined, refreshing: boolean): { text
   const minutes = Math.floor((Date.now() - status.at) / 60_000);
   const ago = minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.floor(minutes / 60)}h ago`;
   return { text: `Updated ${ago}`, problem: false };
+}
+
+/**
+ * The courses to offer for a link: those in its feed plus any you hid, so a hidden course can always
+ * be turned back on. A link with a single course you haven't hidden has nothing to choose.
+ */
+function courseChoices(feed: CalendarFeed): string[] {
+  const all = [...new Set([...(feed.courses ?? []), ...(feed.hiddenCourses ?? [])])].sort();
+  return all.length > 1 || (feed.hiddenCourses?.length ?? 0) > 0 ? all : [];
 }
 
 /** Calendar links from Canvas, Google Calendar or Outlook that keep themselves up to date. */
@@ -53,26 +63,64 @@ export function CalendarLinksCard() {
           {links.map((feed) => {
             const { text, problem: failed } = statusText(feeds.status[feed.id], feeds.refreshing.has(feed.id));
             return (
-              <li key={feed.id} className="flex items-center gap-3 py-2.5">
-                <Link2 className="size-4 shrink-0 text-indigo-500" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{feed.name}</p>
-                  <p className={cx('truncate text-xs', failed ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400')}>
-                    {text}
-                  </p>
+              <li key={feed.id} className="py-2.5">
+                <div className="flex items-center gap-3">
+                  <Link2 className="size-4 shrink-0 text-indigo-500" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{feed.name}</p>
+                    <p
+                      className={cx(
+                        'truncate text-xs',
+                        failed ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400',
+                      )}
+                    >
+                      {text}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => feeds.refresh(feed.id)}
+                    disabled={!feeds.available || feeds.refreshing.has(feed.id)}
+                    aria-label={`Update ${feed.name} now`}
+                  >
+                    <RefreshCw className="size-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => dispatch({ type: 'feed/remove', id: feed.id })}
+                    aria-label={`Remove ${feed.name}`}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => feeds.refresh(feed.id)}
-                  disabled={!feeds.available || feeds.refreshing.has(feed.id)}
-                  aria-label={`Update ${feed.name} now`}
-                >
-                  <RefreshCw className="size-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => dispatch({ type: 'feed/remove', id: feed.id })} aria-label={`Remove ${feed.name}`}>
-                  <Trash2 className="size-4" />
-                </Button>
+                {courseChoices(feed).length > 0 && (
+                  <div className="mt-2 pl-7">
+                    <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Courses to include</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {courseChoices(feed).map((course) => {
+                        const shown = !feed.hiddenCourses?.includes(course);
+                        return (
+                          <button
+                            key={course}
+                            type="button"
+                            aria-pressed={shown}
+                            onClick={() => feeds.setCourseHidden(feed.id, course, shown)}
+                            className={cx(
+                              'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                              shown
+                                ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-200'
+                                : 'border-slate-200 text-slate-400 line-through dark:border-slate-700 dark:text-slate-500',
+                            )}
+                          >
+                            {course}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -119,7 +167,9 @@ export function CalendarLinksCard() {
           {problem && <p className="text-sm text-rose-600 dark:text-rose-400">{problem}</p>}
         </form>
       ) : (
-        <p className="text-sm text-slate-600 dark:text-slate-300">Sign in above to add calendar links. They update on every device you sign in on.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Sign in above to add calendar links. They update on every device you sign in on.
+        </p>
       )}
     </Card>
   );

@@ -10,6 +10,7 @@ import { PRIORITY_DOT } from '../components/styles';
 import { Button, Card, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
 import { isTaskComplete, type Plan } from '../state/planner';
+import { useDueDatesOnly } from '../state/preferences';
 import type { Task } from '../state/types';
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -52,24 +53,25 @@ export function MonthView({
   const { today } = plan;
   const [month, setMonth] = useState(() => firstOfMonth(today));
   const [selected, setSelected] = useState<ISODate>(today);
+  const [dueOnly, setDueOnly] = useDueDatesOnly();
 
   const tasksById = useMemo(() => new Map(data.tasks.map((t) => [t.id, t])), [data.tasks]);
   const complete = (task: Task) => isTaskComplete(task, plan.logged.get(task.id) ?? 0);
 
   const entriesFor = (date: ISODate): Entry[] => {
     const entries: Entry[] = [];
-    // Work already ticked off on this day.
+    // Work already ticked off on this day, unless only due dates are shown.
     const doneByTask = new Map<string, number>();
     for (const log of data.logs) {
       if (log.date === date) doneByTask.set(log.taskId, (doneByTask.get(log.taskId) ?? 0) + log.minutes);
     }
-    for (const [taskId, minutes] of doneByTask) {
+    for (const [taskId, minutes] of dueOnly ? [] : doneByTask) {
       const task = tasksById.get(taskId);
       if (task)
         entries.push({ key: `done-${taskId}`, task, kind: 'work', minutes, done: true, priority: priorityOf(task.dueDate, today) });
     }
     // Work still planned for this day.
-    if (date >= today) {
+    if (!dueOnly && date >= today) {
       for (const item of plan.dayPlan(date).items) {
         const task = tasksById.get(item.taskId);
         if (task)
@@ -105,6 +107,16 @@ export function MonthView({
           {formatDate(month, { month: 'long', year: 'numeric' })}
         </h1>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={dueOnly}
+            onClick={() => setDueOnly(!dueOnly)}
+            title={dueOnly ? 'Showing only what is due each day' : 'Showing what is due and the work planned each day'}
+            className="mr-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            <Flag className="size-3.5" /> Due dates only {dueOnly ? 'on' : 'off'}
+          </button>
           {month !== firstOfMonth(today) && (
             <Button
               size="sm"

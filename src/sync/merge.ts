@@ -2,7 +2,7 @@ import { weekdayOf } from '../lib/dates';
 import { copyOf } from '../state/recurring';
 import type { CalendarEvent } from '../lib/availability';
 import { detachFromFeed, dismissKey } from '../state/feeds';
-import type { AppData, Task, TaskSeries } from '../state/types';
+import type { AppData, CalendarFeed, Task, TaskSeries } from '../state/types';
 
 /** True if two JSON-like values hold the same data, whatever order their keys are in. */
 export function sameData(a: unknown, b: unknown): boolean {
@@ -154,8 +154,12 @@ function keepStartedCopies(base: AppData, local: AppData, remote: AppData, data:
   const finishedInBase = new Set(base.tasks.filter((t) => t.completedAt).map((t) => t.id));
   const present = new Set(data.tasks.map((t) => t.id));
   const started = new Set([...data.logs.map((l) => l.taskId), ...(data.timer ? [data.timer.taskId] : [])]);
+  // Items from a calendar link go away by themselves when the link drops them or you hide their
+  // course, so work on one from the other device brings it back, unless you deleted it yourself.
+  const dismissed = new Map((data.feeds ?? []).map((f) => [f.id, new Set(f.dismissed ?? [])]));
+  const automatic = (t: Task) => !!t.feedId && dismissed.has(t.feedId) && !dismissed.get(t.feedId)!.has(dismissKey(t));
   for (const t of [...local.tasks, ...remote.tasks]) {
-    if (present.has(t.id) || !t.seriesId) continue;
+    if (present.has(t.id) || (!t.seriesId && !automatic(t))) continue;
     // A day finished before the last sync and then deleted on purpose stays deleted.
     if (started.has(t.id) || (t.completedAt && !finishedInBase.has(t.id))) {
       // Prefer a finished copy if one side has it.
@@ -196,14 +200,26 @@ function fitCopiesToSeries(base: AppData, data: AppData) {
 function mergeFeeds(base: AppData, local: AppData, remote: AppData) {
   const dismissedOn = (d: AppData) => new Map((d.feeds ?? []).map((f) => [f.id, new Set(f.dismissed ?? [])]));
   const [b, l, r] = [dismissedOn(base), dismissedOn(local), dismissedOn(remote)];
-  const withoutDismissed = (d: AppData) => (d.feeds ?? []).map(({ dismissed: _d, ...f }) => f);
-  return mergeById(withoutDismissed(base), withoutDismissed(local), withoutDismissed(remote)).map((f) => {
-    const [bs, ls, rs] = [b.get(f.id), l.get(f.id), r.get(f.id)];
-    const keys = new Set([...(bs ?? []), ...(ls ?? []), ...(rs ?? [])]);
-    const dismissed = [...keys].filter((k) =>
-      pick(bs?.has(k) ?? false, ls?.has(k) ?? rs?.has(k) ?? false, rs?.has(k) ?? ls?.has(k) ?? false),
-    );
-    return dismissed.length ? { ...f, dismissed } : f;
+  const hiddenOn = (d: AppData) => new Map((d.feeds ?? []).map((f) => [f.id, new Set(f.hiddenCourses ?? [])]));
+  const [bh, lh, rh] = [hiddenOn(base), hiddenOn(local), hiddenOn(remote)];
+  const coursesOf = (d: AppData, id: string) => d.feeds?.find((f) => f.id === id)?.courses ?? [];
+  // Lists that change one entry at a time are merged entry by entry; the courses a link has are
+  // found by refreshing, so they never undo a choice made on the other device.
+  const settings = (d: AppData) => (d.feeds ?? []).map(({ dismissed: _d, courses: _c, hiddenCourses: _h, ...f }) => f);
+  const byKey = (bs?: Set<string>, ls?: Set<string>, rs?: Set<string>) =>
+    [...new Set([...(bs ?? []), ...(ls ?? []), ...(rs ?? [])])]
+      .filter((k) => pick(bs?.has(k) ?? false, ls?.has(k) ?? rs?.has(k) ?? false, rs?.has(k) ?? ls?.has(k) ?? false))
+      .sort();
+  return mergeById(settings(base), settings(local), settings(remote)).map((f): CalendarFeed => {
+    const dismissed = byKey(b.get(f.id), l.get(f.id), r.get(f.id));
+    const hiddenCourses = byKey(bh.get(f.id), lh.get(f.id), rh.get(f.id));
+    const courses = [...new Set([...coursesOf(local, f.id), ...coursesOf(remote, f.id)])].sort();
+    return {
+      ...f,
+      ...(dismissed.length ? { dismissed } : {}),
+      ...(courses.length ? { courses } : {}),
+      ...(hiddenCourses.length ? { hiddenCourses } : {}),
+    };
   });
 }
 

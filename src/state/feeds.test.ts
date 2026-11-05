@@ -246,6 +246,68 @@ describe('calendar links', () => {
     expect(data.events).toMatchObject([{ id, title: 'Bio (room 210)', start: 660, end: 735 }]);
   });
 
+  it("records the link's courses and leaves out the ones you hide, bringing them back when shown", () => {
+    const cse = { ...assignment('a1', 'Sprint 4 Report · CSE 485', '2026-11-06'), course: 'CSE 485' };
+    const mat = { ...assignment('a2', 'Section 5.4 · MAT 343', '2026-11-06'), course: 'MAT 343' };
+    let data = apply(withFeed(), [cse, mat]);
+    expect(data.feeds![0]!.courses).toEqual(['CSE 485', 'MAT 343']);
+    expect(data.tasks).toHaveLength(2);
+
+    data = reducer(data, { type: 'feed/hideCourse', id: 'f1', course: 'MAT 343', hidden: true });
+    data = apply(data, [cse, mat]);
+    expect(data.feeds![0]!.hiddenCourses).toEqual(['MAT 343']);
+    expect(data.tasks.map((t) => t.title)).toEqual(['Sprint 4 Report · CSE 485']);
+    // Hiding isn't deleting: showing the course again brings its items back.
+    data = reducer(data, { type: 'feed/hideCourse', id: 'f1', course: 'MAT 343', hidden: false });
+    data = apply(data, [cse, mat]);
+    expect(data.feeds![0]).not.toHaveProperty('hiddenCourses');
+    expect(data.tasks).toHaveLength(2);
+  });
+
+  it('keeps work you started on a hidden course', () => {
+    const mat = { ...assignment('a2', 'Section 5.4 · MAT 343', '2026-11-06'), course: 'MAT 343' };
+    let data = apply(withFeed(), [mat]);
+    data = reducer(data, { type: 'work/log', taskId: data.tasks[0]!.id, date: TODAY, minutes: 30 });
+    data = reducer(data, { type: 'feed/hideCourse', id: 'f1', course: 'MAT 343', hidden: true });
+    expect(apply(data, [mat]).tasks).toHaveLength(1);
+  });
+
+  it("keeps a course hidden on one device when the other's refresh finds a new course", () => {
+    const cse = { ...assignment('a1', 'Sprint 4 Report · CSE 485', '2026-11-06'), course: 'CSE 485' };
+    const mat = { ...assignment('a2', 'Section 5.4 · MAT 343', '2026-11-06'), course: 'MAT 343' };
+    const bio = { ...assignment('a3', 'Lab · BIO 181', '2026-11-06'), course: 'BIO 181' };
+    const base = apply(withFeed(), [cse, mat]);
+    const phone = apply(reducer(base, { type: 'feed/hideCourse', id: 'f1', course: 'MAT 343', hidden: true }), [cse, mat]);
+    const laptop = apply(base, [cse, mat, bio]);
+    const merged = mergeAppData(base, laptop, phone);
+    expect(merged.feeds![0]).toMatchObject({ hiddenCourses: ['MAT 343'], courses: ['BIO 181', 'CSE 485', 'MAT 343'] });
+    expect(apply(merged, [cse, mat, bio]).tasks.map((t) => t.title).sort()).toEqual(['Lab · BIO 181', 'Sprint 4 Report · CSE 485']);
+  });
+
+  it('keeps work logged on one device on an assignment whose course the other hid', () => {
+    const mat = { ...assignment('a2', 'Section 5.4 · MAT 343', '2026-11-06'), course: 'MAT 343' };
+    const base = apply(withFeed(), [mat]);
+    const id = base.tasks[0]!.id;
+    const phone = apply(reducer(base, { type: 'feed/hideCourse', id: 'f1', course: 'MAT 343', hidden: true }), [mat]);
+    expect(phone.tasks).toEqual([]);
+    const laptop = reducer(base, { type: 'work/log', taskId: id, date: TODAY, minutes: 30 });
+    const merged = mergeAppData(base, phone, laptop);
+    expect(merged.tasks.map((t) => t.id)).toEqual([id]);
+    expect(merged.logs).toHaveLength(1);
+    // A refresh afterwards keeps it, since it's started.
+    expect(apply(merged, [mat]).tasks).toHaveLength(1);
+  });
+
+  it('shortens titles brought in before course codes were shortened', () => {
+    let data = apply(withFeed(), [assignment('a1', 'Essay [2026FallC-T-ENG102-1234]', '2026-11-06'), { ...lecture('l1', '2026-11-03'), title: 'Lecture [2026FallC-T-BIO181-55]' }]);
+    data = apply(data, [
+      { ...assignment('a1', 'Essay · ENG 102', '2026-11-06'), course: 'ENG 102' },
+      { ...lecture('l1', '2026-11-03'), title: 'Lecture · BIO 181', course: 'BIO 181' },
+    ]);
+    expect(data.tasks[0]!.title).toBe('Essay · ENG 102');
+    expect(data.events[0]!.title).toBe('Lecture · BIO 181');
+  });
+
   it('adds each item once when two devices refresh the same link before syncing', () => {
     const base = withFeed();
     const entries = [assignment('a1', 'Essay 2', '2026-11-06'), lecture('l1', '2026-11-03')];

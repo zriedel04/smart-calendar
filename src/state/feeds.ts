@@ -70,11 +70,17 @@ function eventOver(event: CalendarEvent, today: ISODate): boolean {
  *
  * Returns `data` itself when nothing changed.
  */
-export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEntry[], today: ISODate, now: string): AppData {
+export function applyFeed(data: AppData, feedId: string, allEntries: readonly IcsEntry[], today: ISODate, now: string): AppData {
   const feed = data.feeds?.find((f) => f.id === feedId);
   if (!feed) return data;
   const dismissed = new Set(feed.dismissed ?? []);
   const ours = (item: { feedId?: string; sourceId?: string }) => item.feedId === feed.id || (!item.feedId && item.sourceId !== undefined);
+  // An empty copy is more likely a hiccup at the source than every item being cancelled, so it
+  // removes nothing. Entries of courses you hid count as dropped, so what they added goes.
+  const keep = allEntries.length === 0;
+  const courses = [...new Set(allEntries.flatMap((e) => (e.course ? [e.course] : [])))].sort();
+  const hidden = new Set(feed.hiddenCourses ?? []);
+  const entries = allEntries.filter((e) => !e.course || !hidden.has(e.course));
   const uids = new Set(entries.map((e) => e.uid));
   const started = startedTasks(data);
   let changed = false;
@@ -180,9 +186,7 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
     }
   }
 
-  // Upcoming items the link no longer has were removed or cancelled at the source. An empty copy is
-  // more likely a hiccup at the source than every item being cancelled, so it removes nothing.
-  const keep = entries.length === 0;
+  // Upcoming items the link no longer has were removed or cancelled at the source.
   const keptTasks = tasks.filter(
     (t) =>
       keep ||
@@ -198,8 +202,17 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
   events = keptEvents;
 
   if (added.tasks.length || added.events.length) changed = true;
-  if (!changed) return data;
-  return { ...data, tasks: [...tasks, ...added.tasks], events: [...events, ...added.events] };
+  // Which courses the link has is kept for choosing which to hide; an empty copy leaves it as it was.
+  const coursesChanged = !keep && JSON.stringify(courses) !== JSON.stringify(feed.courses ?? []);
+  if (!changed && !coursesChanged) return data;
+  const feeds = coursesChanged
+    ? data.feeds!.map((f) => {
+        if (f.id !== feed.id) return f;
+        const { courses: _old, ...rest } = f;
+        return courses.length ? { ...rest, courses } : rest;
+      })
+    : data.feeds;
+  return { ...data, feeds, tasks: [...tasks, ...added.tasks], events: [...events, ...added.events] };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseIcs } from './ics';
+import { parseIcs, splitCourse } from './ics';
 
 const calendar = (...events: string[]) =>
   ['BEGIN:VCALENDAR', 'VERSION:2.0', ...events.flatMap((e) => ['BEGIN:VEVENT', e, 'END:VEVENT']), 'END:VCALENDAR'].join(
@@ -22,12 +22,23 @@ describe('parseIcs', () => {
     );
     expect(entry).toMatchObject({
       uid: 'event-assignment-123456',
-      title: 'Lab 5 report [CHEM 101]',
+      title: 'Lab 5 report · CHEM 101',
+      course: 'CHEM 101',
       date: '2026-11-05',
       start: 23 * 60 + 59,
       allDay: false,
       looksLikeAssignment: true,
     });
+  });
+
+  it("shortens Canvas's course section to the course code", () => {
+    expect(splitCourse('Sprint 4 Peer Review [2026FallC-T-CSE485-CSE423-60367-60362-63391]')).toEqual({
+      title: 'Sprint 4 Peer Review · CSE 485',
+      course: 'CSE 485',
+    });
+    expect(splitCourse('In-Class Engagement 9 [2026FallDYN-T-UNI220-74652]')).toEqual({ title: 'In-Class Engagement 9 · UNI 220', course: 'UNI 220' });
+    expect(splitCourse('Team sync [Zoom]')).toEqual({ title: 'Team sync [Zoom]' });
+    expect(splitCourse('Lunch')).toEqual({ title: 'Lunch' });
   });
 
   it('reads all-day entries, with the exclusive end date made inclusive', () => {

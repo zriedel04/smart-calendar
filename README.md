@@ -31,7 +31,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **A daily checklist built for you.** Each day's list adds up to the hours you have free. Tick items off as you go.
 - **Stays ahead of deadlines.** Work due next week gets pulled forward into today's free time instead of piling up the night before.
 - **Usual hours, with one-off changes.** Set default hours for each weekday (say, Mondays 12pm to 6pm), then change a single date (this Monday, 12pm to 4pm) without touching the others.
-- **Month calendar.** See planned work and due dates on every day, crossed off as you finish them.
+- **Month calendar.** See planned work and due dates on every day, crossed off as you finish them, or switch to due dates only for a view like your school calendar.
 - **Add several tasks at once.** Enter a batch of assignments in one form.
 - **Re-plans instantly.** Change your hours, add a task, or tick something off and every day's list updates.
 - **Priorities at a glance.** Due today is **Urgent**, due within a week is **Needed**, anything later is **To do**, and missed due dates are **Overdue**.
@@ -45,7 +45,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Log part of an item, or push it to tomorrow.** Did 1 hour of a 2-hour block? Log just that, and the rest stays on the list. Not getting to something today? Push it to tomorrow and today's time goes to the next task.
 - **Repeating tasks.** "Study Spanish, 1 hour every weekday" or "Laundry every Sunday": each day gets its own item, planned on that day, even a day off. Missed days are skipped instead of piling up.
 - **Unfinished work rolls over.** Anything you don't get to is rescheduled from the next day automatically.
-- **Calendar links that stay up to date.** Signed in, paste your Canvas, Google Calendar or Outlook link once. New assignments come in as tasks with your usual estimate, changed due dates and times update, and cancelled events disappear. Your own edits and deletions stick.
+- **Calendar links that stay up to date.** Signed in, paste your Canvas, Google Calendar or Outlook link once. New assignments come in as tasks with your usual estimate, changed due dates and times update, and cancelled events disappear. Your own edits and deletions stick. Canvas titles are shortened to the course code ("Sprint 4 Report · CSE 485"), and you can leave out courses you don't want.
 - **Sync across devices, if you want it.** Sign in with an emailed link and your phone and laptop share one calendar. Changes made offline on two devices are merged item by item, so nothing is lost. No account needed to use the app.
 - **Works offline and installs like an app.** It's a PWA, so you can add it to your phone's home screen. Without an account, data stays in your browser, with JSON export and import for backups.
 - **Light and dark mode**, following your system setting.

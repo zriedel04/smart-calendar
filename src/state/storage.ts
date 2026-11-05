@@ -178,7 +178,9 @@ export function parseAppData(json: string): AppData {
           typeof f.estimateMinutes === 'number' &&
           f.estimateMinutes > 0 &&
           typeof f.addedAt === 'string' &&
-          (f.dismissed === undefined || (Array.isArray(f.dismissed) && f.dismissed.every((d) => typeof d === 'string'))),
+          [f.dismissed, f.courses, f.hiddenCourses].every(
+            (list) => list === undefined || (Array.isArray(list) && list.every((d) => typeof d === 'string')),
+          ),
       )
     : [];
 

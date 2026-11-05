@@ -15,6 +15,8 @@ export interface FeedsValue {
   /** Fetches a link and, if it's a calendar, adds it. Resolves to an error message, or null once added. */
   add: (url: string, estimateMinutes: number) => Promise<string | null>;
   refresh: (feedId: string) => void;
+  /** Hides or shows a course's entries from a link, then refreshes the link so it takes effect. */
+  setCourseHidden: (feedId: string, course: string, hidden: boolean) => void;
 }
 
 export const FeedsContext = createContext<FeedsValue>({
@@ -23,6 +25,7 @@ export const FeedsContext = createContext<FeedsValue>({
   refreshing: new Set(),
   add: async () => "Calendar links aren't available here.",
   refresh: () => {},
+  setCourseHidden: () => {},
 });
 
 export const useFeeds = () => useContext(FeedsContext);

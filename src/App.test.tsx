@@ -356,6 +356,21 @@ describe('App', () => {
     expect(screen.getByText('Finished')).toBeInTheDocument();
   });
 
+  it('shows only due dates on the month calendar when asked, and remembers it', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    expect(screen.getByRole('checkbox', { name: 'Check off "Reply to internship recruiter"' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: /Due dates only/ }));
+    expect(screen.getByRole('switch', { name: /Due dates only/ })).toHaveAttribute('aria-checked', 'true');
+    // Planned work is gone; events still show.
+    expect(screen.queryByRole('checkbox', { name: /^Check off/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Monday, November 2' })).toHaveTextContent('Team standup');
+    expect(localStorage.getItem('smart-calendar:month-due-only')).toBe('on');
+  });
+
   it('adds a birthday from the month calendar without taking work time', async () => {
     const user = userEvent.setup();
     renderApp();
