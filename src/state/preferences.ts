@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 const SHOW_TIMES_KEY = 'smart-calendar:show-times';
 const DUE_ONLY_KEY = 'smart-calendar:month-due-only';
+const HOLIDAYS_KEY = 'smart-calendar:show-holidays';
 
 function read(key: string): string | null {
   try {
@@ -40,6 +41,30 @@ export function useDueDatesOnly(): [boolean, (next: boolean) => void] {
     write(DUE_ONLY_KEY, next ? 'on' : 'off');
   };
   return [dueOnly, update];
+}
+
+const holidayListeners = new Set<() => void>();
+// Kept in memory too, so the switch still works where storage is blocked.
+let showHolidays = read(HOLIDAYS_KEY) !== 'off';
+
+/**
+ * Whether US holidays show on the calendar. On unless you turn it off; kept per device. Every view
+ * using it updates together when it changes.
+ */
+export function useShowHolidays(): [boolean, (next: boolean) => void] {
+  const show = useSyncExternalStore(
+    (listener) => {
+      holidayListeners.add(listener);
+      return () => holidayListeners.delete(listener);
+    },
+    () => showHolidays,
+  );
+  const update = (next: boolean) => {
+    showHolidays = next;
+    write(HOLIDAYS_KEY, next ? 'on' : 'off');
+    for (const listener of holidayListeners) listener();
+  };
+  return [show, update];
 }
 
 /** Minutes since midnight, updated every minute. */
