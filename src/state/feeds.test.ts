@@ -298,6 +298,31 @@ describe('calendar links', () => {
     expect(apply(merged, [mat]).tasks).toHaveLength(1);
   });
 
+  it('shortens long Canvas titles when a removed link is added back, keeping titles you changed', () => {
+    let data = apply(withFeed(), [
+      assignment('a1', 'Essay [2026FallC-T-ENG102-1234]', '2026-11-06'),
+      assignment('a2', 'Quiz [2026FallC-T-ENG102-1234]', '2026-11-06'),
+      { ...lecture('l1', '2026-11-03'), title: 'Lecture [2026FallC-T-BIO181-55]' },
+    ]);
+    const quiz = data.tasks.find((t) => t.title.startsWith('Quiz'))!;
+    data = reducer(data, { type: 'task/update', id: quiz.id, draft: { title: 'Quiz (open book)', dueDate: quiz.dueDate, estimateMinutes: quiz.estimateMinutes } });
+    data = reducer(data, { type: 'feed/remove', id: 'f1' });
+    data = reducer(data, { type: 'feed/add', feed: { ...FEED, id: 'f2' } });
+    data = reducer(data, {
+      type: 'feed/apply',
+      id: 'f2',
+      entries: [
+        { ...assignment('a1', 'Essay · ENG 102', '2026-11-06'), course: 'ENG 102' },
+        { ...assignment('a2', 'Quiz · ENG 102', '2026-11-06'), course: 'ENG 102' },
+        { ...lecture('l1', '2026-11-03'), title: 'Lecture · BIO 181', course: 'BIO 181' },
+      ],
+      today: TODAY,
+      at: NOW,
+    });
+    expect(data.tasks.map((t) => t.title).sort()).toEqual(['Essay · ENG 102', 'Quiz (open book)']);
+    expect(data.events.map((e) => e.title)).toEqual(['Lecture · BIO 181']);
+  });
+
   it('shortens titles brought in before course codes were shortened', () => {
     let data = apply(withFeed(), [assignment('a1', 'Essay [2026FallC-T-ENG102-1234]', '2026-11-06'), { ...lecture('l1', '2026-11-03'), title: 'Lecture [2026FallC-T-BIO181-55]' }]);
     data = apply(data, [
