@@ -23,6 +23,11 @@ export interface IcsEntry {
   until?: ISODate;
   /** True for Canvas assignments and other due-at-a-moment entries, which should become tasks. */
   looksLikeAssignment: boolean;
+  /**
+   * The date the entry (or this run of it) starts on in the calendar's own time zone, which every
+   * device reads the same way, unlike `date`.
+   */
+  sourceDate?: ISODate;
 }
 
 interface Property {
@@ -237,6 +242,7 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
     end: endMinutes,
     repeat: 'none',
     looksLikeAssignment,
+    sourceDate: `${startProp.value.slice(0, 4)}-${startProp.value.slice(4, 6)}-${startProp.value.slice(6, 8)}`,
   };
 
   const rrule = get('RRULE');
@@ -305,7 +311,7 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
 
   // Walk the series in order. Runs of occurrences that land at the same local time, with nothing
   // excluded in between, become one repeating entry each (one set of runs per weekday).
-  type Run = { first: ISODate; last: ISODate; start: Minutes; end: Minutes; broken: boolean };
+  type Run = { first: ISODate; last: ISODate; start: Minutes; end: Minutes; broken: boolean; source: ISODate };
   const runs = new Map<number, Run[]>(weekdays.map((w) => [w, []]));
   let seen = 0;
   for (let i = 0, d = sourceDate; i < 20000; i++) {
@@ -341,7 +347,7 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
               ? moment.date.slice(8) === run.first.slice(8)
               : moment.date.slice(5) === run.first.slice(5));
         if (run && sameSlot && !run.broken && run.start === startAt && run.end === endAt) run.last = moment.date;
-        else series.push({ first: moment.date, last: moment.date, start: startAt, end: endAt, broken: false });
+        else series.push({ first: moment.date, last: moment.date, start: startAt, end: endAt, broken: false, source: d });
       }
     }
     d =
@@ -363,6 +369,7 @@ function toEntries(props: Property[], now: Date): IcsEntry[] {
         ...base,
         repeat,
         date: run.first,
+        sourceDate: run.source,
         endDate: addDays(run.first, span),
         ...(allDay ? {} : { start: run.start, end: run.end }),
         ...(runUntil ? { until: runUntil } : {}),

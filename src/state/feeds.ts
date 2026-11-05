@@ -110,11 +110,12 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
     }
 
     // Each event is known by its run's first date and its day within the run, not by its position,
-    // so a run added or dropped at the source doesn't shift the others. A one-off event is known by
+    // so a run added or dropped at the source doesn't shift the others. The date is the one in the
+    // calendar's own time zone, so devices in different zones agree on it. A one-off event is known by
     // its day alone, so one deleted here stays deleted when it's moved to another date at the source.
     const oneOff = runs.length === 1 && first.repeat === 'none';
     const keyed = runs.flatMap((run) =>
-      toEventDrafts(run).map((d, day) => ({ d, key: `${uid}:${oneOff ? '' : run.date}+${day}` })),
+      toEventDrafts(run).map((d, day) => ({ d, key: `${uid}:${oneOff ? '' : (run.sourceDate ?? run.date)}+${day}` })),
     );
     const drafts = keyed.map((k) => k.d);
     const stamp = JSON.stringify(drafts);

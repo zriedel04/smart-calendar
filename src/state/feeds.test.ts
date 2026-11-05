@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { IcsEntry } from '../lib/ics';
+import { parseIcs, type IcsEntry } from '../lib/ics';
 import { mergeAppData } from '../sync/merge';
 import { createEmptyData } from './defaults';
 import { feedItemId, feedName, normalizeFeedUrl } from './feeds';
@@ -193,6 +193,29 @@ describe('calendar links', () => {
     const phone = reducer(base, { type: 'event/update', id: event.id, draft: { title: 'Guest talk (room 4)', date: event.date, start: event.start, end: event.end, repeat: 'none' } });
     expect(mergeAppData(base, laptop, phone).events).toHaveLength(1);
     expect(laptop.events[0]!.id).toBe(event.id);
+  });
+
+  it('adds a repeating event once when devices in different time zones refresh the link', () => {
+    const ics = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:late-lab', 'SUMMARY:Late lab', 'DTSTART:20261106T003000Z', 'DTEND:20261106T013000Z',
+      'RRULE:FREQ=WEEKLY;COUNT=4', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const zone = process.env.TZ;
+    const readIn = (tz: string) => {
+      process.env.TZ = tz;
+      try {
+        return parseIcs(ics, new Date('2026-11-02T16:00:00Z'));
+      } finally {
+        process.env.TZ = zone;
+      }
+    };
+    const [utc, la] = [readIn('UTC'), readIn('America/Los_Angeles')];
+    expect(utc[0]!.date).not.toBe(la[0]!.date);
+    const base = withFeed();
+    const laptop = apply(base, utc);
+    const phone = apply(base, la);
+    expect(mergeAppData(base, laptop, phone).events).toHaveLength(1);
+    // Deleting it on one device keeps the other device's copy from coming back.
+    const deleted = reducer(laptop, { type: 'event/delete', id: laptop.events[0]!.id });
+    expect(apply(mergeAppData(base, deleted, phone), la).events).toEqual([]);
   });
 
   it('adds each item once when two devices refresh the same link before syncing', () => {
