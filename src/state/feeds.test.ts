@@ -174,6 +174,16 @@ describe('calendar links', () => {
     expect(data.events).toEqual([]);
   });
 
+  it('adds the runs a file import was missing when the link takes the events over', () => {
+    // The file had only the Wednesday run; the link also has Monday's.
+    let data = reducer(createEmptyData(), { type: 'event/add', draft: { title: 'Biology lecture', date: '2026-11-04', start: 600, end: 675, repeat: 'weekly', sourceId: 'mwf' } });
+    const fileId = data.events[0]!.id;
+    data = apply(withFeed(data), [lecture('mwf', '2026-11-02'), lecture('mwf', '2026-11-04')]);
+    expect(data.events.map((e) => e.date).sort()).toEqual(['2026-11-02', '2026-11-04']);
+    expect(data.events.find((e) => e.date === '2026-11-04')!.id).toBe(fileId);
+    expect(apply(data, [lecture('mwf', '2026-11-02'), lecture('mwf', '2026-11-04')])).toBe(data);
+  });
+
   it('adds each item once when two devices refresh the same link before syncing', () => {
     const base = withFeed();
     const entries = [assignment('a1', 'Essay 2', '2026-11-06'), lecture('l1', '2026-11-03')];

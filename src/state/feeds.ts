@@ -132,11 +132,24 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
     if (group.length > 0) {
       if (group.some((e) => !e.feedId)) {
         // Events imported from a file keep their ids and edits, and learn which run and day they are,
-        // so deleting one later is remembered.
+        // so deleting one later is remembered. Each is matched to the run on its date if there is one,
+        // then to the runs left in date order; runs the file didn't have are added.
         const ordered = [...group].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
-        const keys = [...keyed].sort((a, b) => a.d.date.localeCompare(b.d.date) || a.d.start - b.d.start).map((k) => k.key);
-        const keyOf = new Map(ordered.map((e, i) => [e, keys[i] ?? `${uid}:${oneOff ? '' : e.date}+0`]));
-        events = events.map((e) => (keyOf.has(e) ? { ...e, feedId: feed.id, sourceStamp: stamp, sourceKey: keyOf.get(e)! } : e));
+        const left = [...keyed].sort((a, b) => a.d.date.localeCompare(b.d.date) || a.d.start - b.d.start);
+        const keyOf = new Map<CalendarEvent, string>();
+        const take = (e: CalendarEvent, i: number) => {
+          if (i < 0) return;
+          keyOf.set(e, left[i]!.key);
+          left.splice(i, 1);
+        };
+        for (const e of ordered) take(e, left.findIndex((k) => k.d.date === e.date));
+        for (const e of ordered) if (!keyOf.has(e)) take(e, left.length ? 0 : -1);
+        for (const e of ordered) if (!keyOf.has(e)) keyOf.set(e, `${uid}:${oneOff ? '' : e.date}+0`);
+        const missing = new Set(left.map((k) => k.key));
+        events = [
+          ...events.map((e) => (keyOf.has(e) ? { ...e, feedId: feed.id, sourceStamp: stamp, sourceKey: keyOf.get(e)! } : e)),
+          ...fresh().filter((e) => missing.has(e.sourceKey!)),
+        ];
         changed = true;
       } else if (group.some((e) => e.sourceStamp !== stamp)) {
         events = [...events.filter((e) => !group.includes(e)), ...fresh()];
