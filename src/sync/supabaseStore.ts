@@ -9,8 +9,10 @@ let client: SupabaseClient | null = null;
 
 /** The app's one Supabase client, made the first time it's needed. */
 export function supabase(): SupabaseClient {
+  // The implicit flow lets an emailed link finish signing in from whichever browser opens it. The
+  // PKCE flow only works in the browser that asked for the link, and phones often open links in another.
   client ??= createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    auth: { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
   return client;
 }
