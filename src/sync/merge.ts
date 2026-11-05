@@ -45,6 +45,14 @@ function seriesDetails(series: TaskSeries | undefined) {
 }
 const sameSeries = (a: TaskSeries | undefined, b: TaskSeries | undefined) => sameData(seriesDetails(a), seriesDetails(b));
 
+/** An event without the days it skips, which are merged day by day (see mergeSkips). */
+function eventDetails(event: CalendarEvent | undefined) {
+  if (!event) return event;
+  const { skip: _skip, ...details } = event;
+  return details;
+}
+const sameEvent = (a: CalendarEvent | undefined, b: CalendarEvent | undefined) => sameData(eventDetails(a), eventDetails(b));
+
 /** Merges two lists of items with ids, item by item, so adding, editing and deleting on either side all carry over. */
 function mergeById<T extends { id: string }>(
   base: readonly T[],
@@ -126,23 +134,50 @@ function dropCopiesOfStoppedSeries(base: AppData, data: AppData) {
   );
 }
 
+/** Merges one list of days per item (keyed by id) day by day against the base. */
+function mergeDays<T extends { id: string }>(
+  base: readonly T[],
+  local: readonly T[],
+  remote: readonly T[],
+  merged: readonly T[],
+  daysOf: (item: T) => readonly string[] | undefined,
+  withDays: (item: T, days: string[]) => T,
+): T[] {
+  const setsOf = (items: readonly T[]) => new Map(items.map((item) => [item.id, new Set(daysOf(item) ?? [])]));
+  const [b, l, r] = [setsOf(base), setsOf(local), setsOf(remote)];
+  return merged.map((item) => {
+    const [bs, ls, rs] = [b.get(item.id), l.get(item.id), r.get(item.id)];
+    const all = new Set([...(bs ?? []), ...(ls ?? []), ...(rs ?? [])]);
+    const days = [...all].filter((d) => pick(bs?.has(d) ?? false, ls?.has(d) ?? rs?.has(d) ?? false, rs?.has(d) ?? ls?.has(d) ?? false)).sort();
+    return withDays(item, days);
+  });
+}
+
 /**
  * Merging a series ignores `skipped`, so that the app tidying away passed days isn't treated as an
- * edit. Skipped days are merged day by day against the base instead: a day skipped on either device
- * stays skipped, and a skip taken back (with Undo) or tidied away stays gone.
+ * edit, and merging an event ignores `skip`. Those days are merged day by day against the base
+ * instead: a day skipped (or changed on its own) on either device stays skipped, and a skip taken
+ * back (with Undo) or tidied away stays gone.
  */
 function mergeSkips(base: AppData, local: AppData, remote: AppData, data: AppData) {
-  const skipsOf = (d: AppData) => new Map((d.series ?? []).map((s) => [s.id, new Set(s.skipped ?? [])]));
-  const b = skipsOf(base);
-  const l = skipsOf(local);
-  const r = skipsOf(remote);
-  data.series = data.series?.map((s) => {
-    const { skipped: _skipped, ...rest } = s;
-    const [bs, ls, rs] = [b.get(s.id), l.get(s.id), r.get(s.id)];
-    const days = new Set([...(bs ?? []), ...(ls ?? []), ...(rs ?? [])]);
-    const skipped = [...days].filter((d) => pick(bs?.has(d) ?? false, ls?.has(d) ?? rs?.has(d) ?? false, rs?.has(d) ?? ls?.has(d) ?? false)).sort();
-    return skipped.length ? { ...rest, skipped } : rest;
-  });
+  if (data.series) {
+    data.series = mergeDays(
+      base.series ?? [],
+      local.series ?? [],
+      remote.series ?? [],
+      data.series,
+      (s) => s.skipped,
+      ({ skipped: _skipped, ...rest }, skipped) => (skipped.length ? { ...rest, skipped } : rest),
+    );
+  }
+  data.events = mergeDays(
+    base.events,
+    local.events,
+    remote.events,
+    data.events,
+    (e) => e.skip,
+    ({ skip: _skip, ...rest }, skip) => (skip.length ? { ...rest, skip } : rest),
+  );
 }
 
 /**
@@ -236,7 +271,7 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
     version: 1,
     tasks: mergeById(base.tasks, local.tasks, remote.tasks),
     logs: mergeById(base.logs, local.logs, remote.logs),
-    events: mergeById(base.events, local.events, remote.events),
+    events: mergeById(base.events, local.events, remote.events, sameEvent),
     weeklyHours: pick(base.weeklyHours, local.weeklyHours, remote.weeklyHours),
     overrides: mergeByKey(base.overrides, local.overrides, remote.overrides),
     series: mergeById(base.series ?? [], local.series ?? [], remote.series ?? [], sameSeries),

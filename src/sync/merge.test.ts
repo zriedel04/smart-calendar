@@ -32,6 +32,21 @@ describe('mergeAppData', () => {
     expect(fromRemote.tasks).toEqual([task('a', 'Edited')]);
   });
 
+  it('keeps one-day changes to a repeating event made on each device', () => {
+    const standup = { id: 's', title: 'Standup', date: '2026-11-02', start: 780, end: 810, repeat: 'weekly' as const };
+    const base: AppData = { ...createEmptyData(), events: [standup] };
+    // The phone moved Nov 9 to 3pm; the laptop cancelled Nov 16 and renamed the series.
+    const phone = reducer(base, { type: 'event/changeDay', id: 's', date: '2026-11-09', draft: { ...standup, date: '2026-11-09', start: 900, end: 930 } });
+    let laptop = reducer(base, { type: 'event/skipDay', id: 's', date: '2026-11-16' });
+    laptop = { ...laptop, events: laptop.events.map((e) => (e.id === 's' ? { ...e, title: 'Team standup' } : e)) };
+
+    for (const merged of [mergeAppData(base, phone, laptop), mergeAppData(base, laptop, phone)]) {
+      const series = merged.events.find((e) => e.id === 's')!;
+      expect(series).toMatchObject({ title: 'Team standup', skip: ['2026-11-09', '2026-11-16'] });
+      expect(merged.events.filter((e) => e.date === '2026-11-09' && e.start === 900)).toHaveLength(1);
+    }
+  });
+
   it('lets this device win when both changed the same thing', () => {
     const base = withTasks(task('a'));
     expect(mergeAppData(base, withTasks(task('a', 'Mine')), withTasks(task('a', 'Theirs'))).tasks[0]?.title).toBe('Mine');
