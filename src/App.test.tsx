@@ -508,6 +508,39 @@ describe('App', () => {
     expect(within(dialog).queryByRole('button', { name: /^Import|Nothing to import/ })).not.toBeInTheDocument();
   });
 
+  it('adds a trip over several days, and an event every other week with a place and notes', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: 'Friday, November 6' }));
+    await user.click(screen.getByRole('button', { name: 'Event' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add to your calendar' });
+    await user.type(within(dialog).getByLabelText('Name'), 'Trip to Flagstaff');
+    await user.click(within(dialog).getByLabelText('All day'));
+    await user.type(within(dialog).getByLabelText('Last day (optional)'), '2026-11-08');
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+    expect(screen.getByRole('button', { name: 'Sunday, November 8' })).toHaveTextContent('Trip to Flagstaff');
+    expect(screen.getByRole('button', { name: 'Monday, November 9' })).not.toHaveTextContent('Trip to Flagstaff');
+
+    await user.click(screen.getByRole('button', { name: 'Tuesday, November 3' }));
+    await user.click(screen.getByRole('button', { name: 'Event' }));
+    dialog = screen.getByRole('dialog', { name: 'Add to your calendar' });
+    await user.type(within(dialog).getByLabelText('Name'), 'Lab meeting');
+    await user.selectOptions(within(dialog).getByLabelText('Repeats'), 'Every 2 weeks');
+    await user.type(within(dialog).getByLabelText('Location (optional)'), 'Coor Hall 170');
+    expect(within(dialog).getByRole('link', { name: 'Open in Maps' })).toHaveAttribute('href', 'https://maps.apple.com/?q=Coor%20Hall%20170');
+    await user.type(within(dialog).getByLabelText('Notes (optional)'), 'Bring the draft');
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+
+    expect(screen.getByRole('button', { name: 'Tuesday, November 17' })).toHaveTextContent('Lab meeting');
+    expect(screen.getByRole('button', { name: 'Tuesday, November 10' })).not.toHaveTextContent('Lab meeting');
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!).events;
+    expect(saved).toContainEqual(expect.objectContaining({ title: 'Trip to Flagstaff', date: '2026-11-06', endDate: '2026-11-08', allDay: true }));
+    expect(saved).toContainEqual(
+      expect.objectContaining({ title: 'Lab meeting', repeat: 'weekly', rule: 'biweekly', location: 'Coor Hall 170', notes: 'Bring the draft' }),
+    );
+  });
+
   it('keeps the last date of a yearly event when it is edited', async () => {
     const data = createSampleData('2026-11-02');
     data.events = [
@@ -519,7 +552,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Schedule' }));
     await user.click(screen.getByRole('button', { name: /County fair/ }));
     const dialog = screen.getByRole('dialog', { name: 'Edit event' });
-    expect(within(dialog).getByLabelText('Last date (optional)')).toHaveValue('2028-10-01');
+    expect(within(dialog).getByLabelText('Stops repeating after (optional)')).toHaveValue('2028-10-01');
     await user.type(within(dialog).getByLabelText('Name'), ' 2026');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 

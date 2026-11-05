@@ -28,6 +28,47 @@ const event = (partial: Partial<CalendarEvent>): CalendarEvent => ({
   ...partial,
 });
 
+describe('finer repeats and events over several days', () => {
+  const on = (e: CalendarEvent, dates: string[]) => dates.filter((d) => eventOccursOn(e, d));
+
+  it('repeats every day, on weekdays, and every other week', () => {
+    // Nov 3, 2026 is a Tuesday.
+    const week = ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-07', '2026-11-08', '2026-11-09'];
+    expect(on(event({ repeat: 'weekly', rule: 'daily' }), week)).toEqual(week.slice(1));
+    expect(on(event({ repeat: 'weekly', rule: 'weekdays' }), week)).toEqual(['2026-11-03', '2026-11-04', '2026-11-09']);
+    expect(on(event({ repeat: 'weekly', rule: 'biweekly' }), ['2026-11-03', '2026-11-10', '2026-11-17', '2026-12-01'])).toEqual([
+      '2026-11-03',
+      '2026-11-17',
+      '2026-12-01',
+    ]);
+  });
+
+  it('repeats on the same weekday of each month, with a 5th one meaning the last', () => {
+    // Nov 19, 2026 is the 3rd Thursday; Dec's 3rd Thursday is the 17th.
+    const third = event({ date: '2026-11-19', repeat: 'monthly', rule: 'monthlyWeekday' });
+    expect(on(third, ['2026-12-10', '2026-12-17', '2026-12-19', '2027-01-21'])).toEqual(['2026-12-17', '2027-01-21']);
+    // Oct 29, 2026 is a 5th Thursday: November has four, so it lands on the last one, the 26th.
+    const last = event({ date: '2026-10-29', repeat: 'monthly', rule: 'monthlyWeekday' });
+    expect(on(last, ['2026-11-19', '2026-11-26', '2026-12-31'])).toEqual(['2026-11-26', '2026-12-31']);
+  });
+
+  it('reads an unknown rule as the plain repeat beside it', () => {
+    expect(eventOccursOn(event({ repeat: 'weekly', rule: 'hourly' as never }), '2026-11-10')).toBe(true);
+    expect(eventOccursOn(event({ repeat: 'weekly', rule: 'hourly' as never }), '2026-11-04')).toBe(false);
+  });
+
+  it('runs an all-day event through its last day, and each repeat as long', () => {
+    const trip = event({ date: '2026-11-06', endDate: '2026-11-08', allDay: true, blocksWork: true });
+    expect(on(trip, ['2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08', '2026-11-09'])).toEqual(['2026-11-06', '2026-11-07', '2026-11-08']);
+    expect(freeHoursOn(rules({ events: [trip] }), '2026-11-07')).toEqual([]);
+
+    const yearly = { ...trip, repeat: 'yearly' as const };
+    expect(on(yearly, ['2027-11-05', '2027-11-07', '2027-11-08', '2027-11-09'])).toEqual(['2027-11-07', '2027-11-08']);
+    // A last day only counts for all-day events.
+    expect(eventOccursOn(event({ endDate: '2026-11-05' }), '2026-11-04')).toBe(false);
+  });
+});
+
 describe('availability', () => {
   it('uses the weekday default when there is no override', () => {
     expect(workingHoursOn(rules(), '2026-11-02')).toEqual(noonToSix); // Monday

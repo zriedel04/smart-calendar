@@ -1,12 +1,21 @@
-import { Trash2 } from 'lucide-react';
+import { MapPin, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { eventBlocksWork, eventKind, type CalendarEvent, type EventKind, type EventRepeat } from '../lib/availability';
-import { isISODate, type ISODate } from '../lib/dates';
+import {
+  eventBlocksWork,
+  eventKind,
+  MAX_EVENT_DAYS,
+  REPEAT_RULES,
+  type CalendarEvent,
+  type EventKind,
+  type EventRepeat,
+  type RepeatRule,
+} from '../lib/availability';
+import { daysBetween, isISODate, WEEKDAY_NAMES, weekdayOf, type ISODate } from '../lib/dates';
 import { parseTime, toTimeInputValue } from '../lib/time';
 import { useStore } from '../state/context';
 import type { EventDraft } from '../state/reducer';
 import { cx } from './cx';
-import { EVENT_KINDS } from './eventStyles';
+import { EVENT_KINDS, mapsUrl, nthWeekdayLabel, ordinal } from './eventStyles';
 import { inputClass } from './styles';
 import { Button, Field, Modal } from './ui';
 
@@ -16,6 +25,20 @@ const PLACEHOLDERS: Record<EventKind, string> = {
   birthday: "e.g. Mom's birthday",
   other: 'e.g. Dentist',
 };
+
+/** One choice in the Repeats menu: a plain repeat, or a finer rule stored beside it. */
+type RepeatChoice = EventRepeat | RepeatRule;
+
+const RULE_BASE: Record<RepeatRule, EventRepeat> = {
+  daily: 'weekly',
+  weekdays: 'weekly',
+  biweekly: 'weekly',
+  monthlyWeekday: 'monthly',
+};
+
+function choiceOf(event: CalendarEvent): RepeatChoice {
+  return event.rule && REPEAT_RULES.includes(event.rule) ? event.rule : event.repeat;
+}
 
 const checkboxClass = 'size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600';
 
@@ -39,8 +62,11 @@ export function EventForm({
   const [allDay, setAllDay] = useState(event?.allDay ?? false);
   const [start, setStart] = useState(toTimeInputValue(event?.start ?? 14 * 60));
   const [end, setEnd] = useState(toTimeInputValue(event?.end ?? 15 * 60));
-  const [repeat, setRepeat] = useState<EventRepeat>(event?.repeat ?? (defaultDate ? 'none' : 'weekly'));
+  const [repeat, setRepeat] = useState<RepeatChoice>(event ? choiceOf(event) : defaultDate ? 'none' : 'weekly');
   const [until, setUntil] = useState(event?.until ?? '');
+  const [endDate, setEndDate] = useState(event?.allDay && event.endDate ? event.endDate : '');
+  const [location, setLocation] = useState(event?.location ?? '');
+  const [notes, setNotes] = useState(event?.notes ?? '');
   const [blocksWork, setBlocksWork] = useState(event ? eventBlocksWork(event) : true);
   const [submitted, setSubmitted] = useState(false);
 
@@ -66,6 +92,7 @@ export function EventForm({
     setBlocksWork(!next);
   }
 
+  const weekday = isISODate(date) ? WEEKDAY_NAMES[weekdayOf(date)] : null;
   const startMin = parseTime(start);
   const endMin = parseTime(end);
   const errors = {
@@ -73,19 +100,32 @@ export function EventForm({
     date: isISODate(date) ? null : 'Pick a date.',
     time: allDay || (startMin !== null && endMin !== null && endMin > startMin) ? null : 'It must end after it starts.',
     until: repeat === 'none' || !until || (isISODate(until) && until >= date) ? null : 'Pick a date after the first one.',
+    endDate:
+      !allDay || !endDate
+        ? null
+        : !isISODate(endDate) || endDate < date
+          ? 'Pick a day on or after the first one.'
+          : isISODate(date) && daysBetween(date, endDate) >= MAX_EVENT_DAYS
+            ? `An event can run up to ${MAX_EVENT_DAYS} days.`
+            : null,
   };
 
   function submit(e: FormEvent) {
     e.preventDefault();
     setSubmitted(true);
-    if (errors.title || errors.date || errors.time || errors.until) return;
+    if (errors.title || errors.date || errors.time || errors.until || errors.endDate) return;
+    const rule = REPEAT_RULES.includes(repeat as RepeatRule) ? (repeat as RepeatRule) : undefined;
     const draft: EventDraft = {
       title: title.trim(),
       date,
+      ...(allDay && endDate && endDate > date ? { endDate } : {}),
+      ...(location.trim() ? { location: location.trim() } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
       // All-day events keep a valid time range so older versions of the app can still read them.
       start: allDay ? 0 : (startMin ?? 0),
       end: allDay ? 24 * 60 : (endMin ?? 0),
-      repeat,
+      repeat: rule ? RULE_BASE[rule] : (repeat as EventRepeat),
+      ...(rule ? { rule } : {}),
       kind,
       allDay,
       blocksWork,
@@ -170,11 +210,15 @@ export function EventForm({
                 id={id}
                 className={inputClass}
                 value={repeat}
-                onChange={(e) => setRepeat(e.target.value as EventRepeat)}
+                onChange={(e) => setRepeat(e.target.value as RepeatChoice)}
               >
                 <option value="none">Doesn't repeat</option>
-                <option value="weekly">Every week</option>
-                <option value="monthly">Every month</option>
+                <option value="daily">Every day</option>
+                <option value="weekdays">Every weekday</option>
+                <option value="weekly">Every week{weekday ? ` on ${weekday}` : ''}</option>
+                <option value="biweekly">Every 2 weeks</option>
+                <option value="monthly">Every month{isISODate(date) ? ` on the ${ordinal(Number(date.slice(8)))}` : ''}</option>
+                {isISODate(date) && <option value="monthlyWeekday">Every month on the {nthWeekdayLabel(date)}</option>}
                 <option value="yearly">Every year</option>
               </select>
             )}
@@ -183,8 +227,8 @@ export function EventForm({
 
         {repeat !== 'none' && (
           <Field
-            label="Last date (optional)"
-            hint={error(errors.until) ?? (repeat === 'weekly' ? 'For example, the end of the semester.' : undefined)}
+            label="Stops repeating after (optional)"
+            hint={error(errors.until) ?? (repeat !== 'yearly' ? 'For example, the end of the semester.' : undefined)}
           >
             {(id) => (
               <input id={id} type="date" className={inputClass} value={until} onChange={(e) => setUntil(e.target.value)} />
@@ -196,6 +240,14 @@ export function EventForm({
           <input type="checkbox" checked={allDay} onChange={(e) => toggleAllDay(e.target.checked)} className={checkboxClass} />
           All day
         </label>
+
+        {allDay && (
+          <Field label="Last day (optional)" hint={error(errors.endDate) ?? 'For a trip or anything else that runs several days.'}>
+            {(id) => (
+              <input id={id} type="date" className={inputClass} value={endDate} min={date} onChange={(e) => setEndDate(e.target.value)} />
+            )}
+          </Field>
+        )}
 
         {!allDay && (
           <>
@@ -228,6 +280,32 @@ export function EventForm({
             {error(errors.time) && <p className="text-xs">{error(errors.time)}</p>}
           </>
         )}
+
+        <Field
+          label="Location (optional)"
+          hint={
+            location.trim() ? (
+              <a href={mapsUrl(location.trim())} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-indigo-600 dark:text-indigo-300">
+                <MapPin className="size-3.5" aria-hidden /> Open in Maps
+              </a>
+            ) : undefined
+          }
+        >
+          {(id) => (
+            <input
+              id={id}
+              className={inputClass}
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="e.g. Coor Hall 170"
+              autoComplete="off"
+            />
+          )}
+        </Field>
+
+        <Field label="Notes (optional)">
+          {(id) => <textarea id={id} rows={2} className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />}
+        </Field>
 
         <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
           <input

@@ -135,6 +135,10 @@ export function parseAppData(json: string): AppData {
           (e.repeat === 'none' || e.repeat === 'weekly' || e.repeat === 'monthly' || e.repeat === 'yearly') &&
           (e.kind === undefined || EVENT_KINDS.includes(e.kind as EventKind)) &&
           (e.until === undefined || isISODate(e.until)) &&
+          (e.endDate === undefined || isISODate(e.endDate)) &&
+          (e.rule === undefined || typeof e.rule === 'string') &&
+          (e.location === undefined || typeof e.location === 'string') &&
+          (e.notes === undefined || typeof e.notes === 'string') &&
           (e.allDay === undefined || typeof e.allDay === 'boolean') &&
           (e.blocksWork === undefined || typeof e.blocksWork === 'boolean'),
       )
