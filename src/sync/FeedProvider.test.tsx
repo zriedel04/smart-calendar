@@ -91,12 +91,12 @@ describe('Calendar links', () => {
 
     await user.click(math);
     expect(within(card).getByRole('button', { name: 'MAT 343' })).toHaveAttribute('aria-pressed', 'false');
-    expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(false);
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(false));
     expect(stored().tasks.some((t) => t.title === 'Sprint report · CSE 485')).toBe(true);
     await user.click(within(card).getByRole('button', { name: 'MAT 343' }));
-    expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(true);
-    // The link's copy from adding it was used, without fetching again.
-    expect(fetchFeed).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(true));
+    // Each change fetches the link's latest copy rather than replaying an older one.
+    expect(fetchFeed).toHaveBeenCalledTimes(3);
   });
 
   it('keeps a hidden course on offer when the link has nothing else', async () => {
@@ -123,6 +123,28 @@ describe('Calendar links', () => {
     expect(math).toHaveAttribute('aria-pressed', 'false');
     await user.click(math);
     await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(true));
+  });
+
+  it("doesn't undo assignments another device brought in when hiding a course", async () => {
+    const user = userEvent.setup();
+    let copy = calendar(
+      assignment('1', 'Sprint report [2026FallC-T-CSE485-60367]', '20261107T065900Z'),
+      assignment('2', 'Section 5.4 [2026FallC-T-MAT343-71234]', '20261107T065900Z'),
+    );
+    setup(ME, async () => copy);
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    const card = (await screen.findByRole('heading', { name: 'Calendar links' })).closest('section')!;
+    await user.type(within(card).getByLabelText('Calendar link'), LINK);
+    await user.click(within(card).getByRole('button', { name: 'Add link' }));
+    // Canvas adds an assignment, which another device brings in and syncs here.
+    copy = calendar(
+      assignment('1', 'Sprint report [2026FallC-T-CSE485-60367]', '20261107T065900Z'),
+      assignment('3', 'Peer review [2026FallC-T-CSE485-60367]', '20261108T065900Z'),
+      assignment('2', 'Section 5.4 [2026FallC-T-MAT343-71234]', '20261107T065900Z'),
+    );
+    await user.click(await within(card).findByRole('button', { name: 'MAT 343' }));
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(false));
+    expect(stored().tasks.some((t) => t.title === 'Peer review · CSE 485')).toBe(true);
   });
 
   it("shows why a link couldn't be added", async () => {

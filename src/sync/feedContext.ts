@@ -15,7 +15,7 @@ export interface FeedsValue {
   /** Fetches a link and, if it's a calendar, adds it. Resolves to an error message, or null once added. */
   add: (url: string, estimateMinutes: number) => Promise<string | null>;
   refresh: (feedId: string) => void;
-  /** Hides or shows a course's entries from a link, right away if the link was fetched on this device. */
+  /** Hides or shows a course's entries from a link, then refreshes the link so it takes effect. */
   setCourseHidden: (feedId: string, course: string, hidden: boolean) => void;
 }
 

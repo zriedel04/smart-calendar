@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../lib/dates';
-import { parseIcs, type IcsEntry } from '../lib/ics';
+import { parseIcs } from '../lib/ics';
 import { useStore } from '../state/context';
 import { FEED_REFRESH_MS, feedName, normalizeFeedUrl } from '../state/feeds';
 import { createId } from '../state/ids';
@@ -28,8 +28,8 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
     statusRef.current = status;
   });
   const inFlight = useRef(new Set<string>());
-  // Each link's latest copy on this device, so hiding a course takes effect without fetching again.
-  const lastEntries = useRef(new Map<string, IcsEntry[]>());
+  // Links asked to refresh again once the refresh in flight finishes, such as after hiding a course.
+  const again = useRef(new Set<string>());
 
   const record = useCallback(
     (feedId: string, next: FeedStatus) => {
@@ -44,16 +44,25 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
 
   const refreshFeed = useCallback(
     async (feed: CalendarFeed) => {
-      if (!fetchFeed || inFlight.current.has(feed.id)) return;
+      if (!fetchFeed) return;
+      if (inFlight.current.has(feed.id)) {
+        again.current.add(feed.id);
+        return;
+      }
       inFlight.current.add(feed.id);
       setRefreshing(new Set(inFlight.current));
       try {
-        const entries = parseIcs(await fetchFeed(feed.url));
-        lastEntries.current.set(feed.id, entries);
-        dispatch({ type: 'feed/apply', id: feed.id, entries, today: localToday(), at: new Date().toISOString() });
-        record(feed.id, { at: Date.now() });
-      } catch (e) {
-        record(feed.id, { at: Date.now(), error: e instanceof Error ? e.message : "Couldn't refresh this calendar." });
+        // Asked again while fetching: fetch once more, so the change behind the ask isn't missed.
+        do {
+          again.current.delete(feed.id);
+          try {
+            const entries = parseIcs(await fetchFeed(feed.url));
+            dispatch({ type: 'feed/apply', id: feed.id, entries, today: localToday(), at: new Date().toISOString() });
+            record(feed.id, { at: Date.now() });
+          } catch (e) {
+            record(feed.id, { at: Date.now(), error: e instanceof Error ? e.message : "Couldn't refresh this calendar." });
+          }
+        } while (again.current.has(feed.id));
       } finally {
         inFlight.current.delete(feed.id);
         setRefreshing(new Set(inFlight.current));
@@ -104,7 +113,6 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
         }
         const entries = parseIcs(text);
         const feed: CalendarFeed = { id: createId(), url, name: feedName(url), estimateMinutes, addedAt: new Date().toISOString() };
-        lastEntries.current.set(feed.id, entries);
         dispatch({ type: 'feed/add', feed });
         dispatch({ type: 'feed/apply', id: feed.id, entries, today: localToday(), at: new Date().toISOString() });
         record(feed.id, { at: Date.now() });
@@ -115,13 +123,11 @@ export function FeedProvider({ statusStore = localFeedStatus, children }: { stat
         if (feed) void refreshFeed(feed);
       },
       setCourseHidden(feedId, course, hidden) {
+        // The link is fetched again rather than replaying an older copy, which could undo
+        // assignments another device brought in since.
         dispatch({ type: 'feed/hideCourse', id: feedId, course, hidden });
-        const entries = lastEntries.current.get(feedId);
-        if (entries) dispatch({ type: 'feed/apply', id: feedId, entries, today: localToday(), at: new Date().toISOString() });
-        else {
-          const feed = feedsRef.current.find((f) => f.id === feedId);
-          if (feed) void refreshFeed(feed);
-        }
+        const feed = feedsRef.current.find((f) => f.id === feedId);
+        if (feed) void refreshFeed(feed);
       },
     }),
     [fetchFeed, status, refreshing, dispatch, record, refreshFeed],
