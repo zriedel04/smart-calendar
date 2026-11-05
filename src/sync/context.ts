@@ -17,6 +17,8 @@ export interface SyncValue {
   conflictPostponed: boolean;
   /** Emails a sign-in link. Resolves to an error message, or null once it's sent. */
   signIn: (email: string) => Promise<string | null>;
+  /** Signs in with the code from the sign-in email, for when the link would open somewhere else. */
+  verifyCode: (email: string, code: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   resolveConflict: (choice: FirstSyncChoice) => void;
   /** Closes the question without choosing; it can be opened again from the account card. */
@@ -38,6 +40,7 @@ export const SyncContext = createContext<SyncValue>({
   conflict: null,
   conflictPostponed: false,
   signIn: async () => 'Accounts aren\'t available here.',
+  verifyCode: async () => 'Accounts aren\'t available here.',
   signOut: async () => {},
   resolveConflict: noop,
   postponeConflict: noop,

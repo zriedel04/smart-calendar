@@ -26,6 +26,7 @@ function setup(signedIn: SyncUser | null, feed: () => Promise<string>, statusAt:
     currentUser: async () => signedIn,
     onUserChange: () => () => {},
     signIn: async () => null,
+    verifyCode: async () => null,
     signOut: async () => {},
     store: () => memoryStore().store,
     onRemoteChange: () => () => {},

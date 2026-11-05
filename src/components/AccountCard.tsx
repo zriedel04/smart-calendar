@@ -18,6 +18,7 @@ export function AccountCard() {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [code, setCode] = useState('');
 
   if (!sync.available) return null;
 
@@ -36,6 +37,21 @@ export function AccountCard() {
     else setSentTo(address);
   }
 
+  async function submitCode(e: FormEvent) {
+    e.preventDefault();
+    if (!sentTo) return;
+    const digits = code.replace(/\s/g, '');
+    if (!/^\d{6,10}$/.test(digits)) {
+      setProblem('Enter the code from the email.');
+      return;
+    }
+    setSending(true);
+    setProblem(null);
+    const failure = await sync.verifyCode(sentTo, digits);
+    setSending(false);
+    if (failure) setProblem(failure);
+  }
+
   if (sync.status === 'signed-out') {
     return (
       <Card>
@@ -44,15 +60,43 @@ export function AccountCard() {
           description="Sign in to keep the same calendar on your phone and laptop. Without an account, everything stays in this browser."
         />
         {sentTo ? (
-          <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300" role="status">
-            <Mail className="mt-0.5 size-4 shrink-0 text-indigo-500" aria-hidden />
-            <span>
-              Check <strong>{sentTo}</strong> for a sign-in link and open it on this device.{' '}
-              <button type="button" onClick={() => setSentTo(null)} className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-300">
-                Use a different email
-              </button>
-            </span>
-          </p>
+          <>
+            <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300" role="status">
+              <Mail className="mt-0.5 size-4 shrink-0 text-indigo-500" aria-hidden />
+              <span>
+                Check <strong>{sentTo}</strong>. Open the sign-in link, or type the code from the email here. The code is the way to
+                sign in if the link opens in a different browser or app.{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSentTo(null);
+                    setCode('');
+                    setProblem(null);
+                  }}
+                  className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-300"
+                >
+                  Use a different email
+                </button>
+              </span>
+            </p>
+            <form onSubmit={submitCode} className="mt-3 flex flex-wrap gap-2" noValidate>
+              <label htmlFor="account-code" className="sr-only">
+                Code from the email
+              </label>
+              <input
+                id="account-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="Code from the email"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className={cx(inputClass, 'min-w-0 flex-1 basis-40 tracking-widest')}
+              />
+              <Button type="submit" variant="primary" disabled={sending}>
+                {sending ? 'Signing in…' : 'Sign in'}
+              </Button>
+            </form>
+          </>
         ) : (
           <form onSubmit={submit} className="flex flex-wrap gap-2" noValidate>
             <label htmlFor="account-email" className="sr-only">
