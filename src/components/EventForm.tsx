@@ -2,6 +2,7 @@ import { MapPin, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import {
   eventBlocksWork,
+  eventExtraDays,
   eventKind,
   MAX_EVENT_DAYS,
   REPEAT_RULES,
@@ -10,7 +11,7 @@ import {
   type EventRepeat,
   type RepeatRule,
 } from '../lib/availability';
-import { daysBetween, isISODate, WEEKDAY_NAMES, weekdayOf, type ISODate } from '../lib/dates';
+import { addDays, daysBetween, formatDate, isISODate, WEEKDAY_NAMES, weekdayOf, type ISODate } from '../lib/dates';
 import { parseTime, toTimeInputValue } from '../lib/time';
 import { useStore } from '../state/context';
 import type { EventDraft } from '../state/reducer';
@@ -47,9 +48,12 @@ export function EventForm({
   event,
   today,
   defaultDate,
+  occurrence,
   onClose,
 }: {
   event?: CalendarEvent;
+  /** The day of a repeating event it was opened from, so just that day can be changed or cancelled. */
+  occurrence?: ISODate;
   today: ISODate;
   /** The date a new event starts on, such as the day picked on the month calendar. */
   defaultDate?: ISODate;
@@ -58,13 +62,27 @@ export function EventForm({
   const { dispatch } = useStore();
   const [kind, setKind] = useState<EventKind>(event ? eventKind(event) : 'busy');
   const [title, setTitle] = useState(event?.title ?? '');
-  const [date, setDate] = useState(event?.date ?? defaultDate ?? today);
+  // Opened from one day of a repeating event, changes go to that day unless you pick every day.
+  const canPickDay = Boolean(event && event.repeat !== 'none' && occurrence);
+  const [scope, setScope] = useState<'day' | 'all'>(canPickDay ? 'day' : 'all');
+  const oneDay = canPickDay && scope === 'day';
+  const [seriesDate, setSeriesDate] = useState(event?.date ?? defaultDate ?? today);
+  const [dayDate, setDayDate] = useState(occurrence ?? today);
+  const date = oneDay ? dayDate : seriesDate;
+  const setDate = oneDay ? setDayDate : setSeriesDate;
   const [allDay, setAllDay] = useState(event?.allDay ?? false);
   const [start, setStart] = useState(toTimeInputValue(event?.start ?? 14 * 60));
   const [end, setEnd] = useState(toTimeInputValue(event?.end ?? 15 * 60));
-  const [repeat, setRepeat] = useState<RepeatChoice>(event ? choiceOf(event) : defaultDate ? 'none' : 'weekly');
+  const [seriesRepeat, setRepeat] = useState<RepeatChoice>(event ? choiceOf(event) : defaultDate ? 'none' : 'weekly');
+  const repeat: RepeatChoice = oneDay ? 'none' : seriesRepeat;
   const [until, setUntil] = useState(event?.until ?? '');
-  const [endDate, setEndDate] = useState(event?.allDay && event.endDate ? event.endDate : '');
+  const [seriesEnd, setSeriesEnd] = useState(event?.allDay && event.endDate ? event.endDate : '');
+  // The day's run lasts as long as the event's runs do.
+  const [dayEnd, setDayEnd] = useState(
+    event && occurrence && event.allDay && event.endDate ? addDays(occurrence, eventExtraDays(event)) : '',
+  );
+  const endDate = oneDay ? dayEnd : seriesEnd;
+  const setEndDate = oneDay ? setDayEnd : setSeriesEnd;
   const [location, setLocation] = useState(event?.location ?? '');
   const [notes, setNotes] = useState(event?.notes ?? '');
   const [blocksWork, setBlocksWork] = useState(event ? eventBlocksWork(event) : true);
@@ -131,13 +149,14 @@ export function EventForm({
       blocksWork,
       ...(repeat !== 'none' && until ? { until } : {}),
     };
-    dispatch(event ? { type: 'event/update', id: event.id, draft } : { type: 'event/add', draft });
+    if (event && oneDay) dispatch({ type: 'event/changeDay', id: event.id, date: occurrence!, draft });
+    else dispatch(event ? { type: 'event/update', id: event.id, draft } : { type: 'event/add', draft });
     onClose();
   }
 
   function remove() {
     if (!event) return;
-    dispatch({ type: 'event/delete', id: event.id });
+    dispatch(oneDay ? { type: 'event/skipDay', id: event.id, date: occurrence! } : { type: 'event/delete', id: event.id });
     onClose();
   }
 
@@ -152,7 +171,7 @@ export function EventForm({
         <>
           {event && (
             <Button variant="danger" onClick={remove} className="mr-auto">
-              <Trash2 className="size-4" /> Delete
+              <Trash2 className="size-4" /> {oneDay ? 'Delete this day' : 'Delete'}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
@@ -165,6 +184,36 @@ export function EventForm({
       }
     >
       <form id="event-form" onSubmit={submit} className="space-y-4" noValidate>
+        {canPickDay && (
+          <div
+            role="radiogroup"
+            aria-label="Which days to change"
+            className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800"
+          >
+            {(
+              [
+                ['day', `Only ${formatDate(occurrence!, { weekday: 'short', month: 'short', day: 'numeric' })}`],
+                ['all', 'Every day it repeats'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={scope === value}
+                onClick={() => setScope(value)}
+                className={cx(
+                  'rounded-md px-2 py-1.5 text-sm font-medium',
+                  scope === value
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div role="radiogroup" aria-label="Kind of event" className="flex flex-wrap gap-2">
           {EVENT_KINDS.map(({ kind: k, label, icon: Icon }) => (
             <button
@@ -200,29 +249,24 @@ export function EventForm({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label={repeat === 'none' ? 'Date' : 'First date'} hint={error(errors.date)}>
-            {(id) => (
-              <input id={id} type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
-            )}
+            {(id) => <input id={id} type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />}
           </Field>
-          <Field label="Repeats">
-            {(id) => (
-              <select
-                id={id}
-                className={inputClass}
-                value={repeat}
-                onChange={(e) => setRepeat(e.target.value as RepeatChoice)}
-              >
-                <option value="none">Doesn't repeat</option>
-                <option value="daily">Every day</option>
-                <option value="weekdays">Every weekday</option>
-                <option value="weekly">Every week{weekday ? ` on ${weekday}` : ''}</option>
-                <option value="biweekly">Every 2 weeks</option>
-                <option value="monthly">Every month{isISODate(date) ? ` on the ${ordinal(Number(date.slice(8)))}` : ''}</option>
-                {isISODate(date) && <option value="monthlyWeekday">Every month on the {nthWeekdayLabel(date)}</option>}
-                <option value="yearly">Every year</option>
-              </select>
-            )}
-          </Field>
+          {!oneDay && (
+            <Field label="Repeats">
+              {(id) => (
+                <select id={id} className={inputClass} value={seriesRepeat} onChange={(e) => setRepeat(e.target.value as RepeatChoice)}>
+                  <option value="none">Doesn't repeat</option>
+                  <option value="daily">Every day</option>
+                  <option value="weekdays">Every weekday</option>
+                  <option value="weekly">Every week{weekday ? ` on ${weekday}` : ''}</option>
+                  <option value="biweekly">Every 2 weeks</option>
+                  <option value="monthly">Every month{isISODate(date) ? ` on the ${ordinal(Number(date.slice(8)))}` : ''}</option>
+                  {isISODate(date) && <option value="monthlyWeekday">Every month on the {nthWeekdayLabel(date)}</option>}
+                  <option value="yearly">Every year</option>
+                </select>
+              )}
+            </Field>
+          )}
         </div>
 
         {repeat !== 'none' && (
@@ -230,9 +274,7 @@ export function EventForm({
             label="Stops repeating after (optional)"
             hint={error(errors.until) ?? (repeat !== 'yearly' ? 'For example, the end of the semester.' : undefined)}
           >
-            {(id) => (
-              <input id={id} type="date" className={inputClass} value={until} onChange={(e) => setUntil(e.target.value)} />
-            )}
+            {(id) => <input id={id} type="date" className={inputClass} value={until} onChange={(e) => setUntil(e.target.value)} />}
           </Field>
         )}
 
@@ -254,26 +296,12 @@ export function EventForm({
             <div className="grid grid-cols-2 gap-3">
               <Field label="Starts">
                 {(id) => (
-                  <input
-                    id={id}
-                    type="time"
-                    step={900}
-                    className={inputClass}
-                    value={start}
-                    onChange={(e) => setStart(e.target.value)}
-                  />
+                  <input id={id} type="time" step={900} className={inputClass} value={start} onChange={(e) => setStart(e.target.value)} />
                 )}
               </Field>
               <Field label="Ends">
                 {(id) => (
-                  <input
-                    id={id}
-                    type="time"
-                    step={900}
-                    className={inputClass}
-                    value={end}
-                    onChange={(e) => setEnd(e.target.value)}
-                  />
+                  <input id={id} type="time" step={900} className={inputClass} value={end} onChange={(e) => setEnd(e.target.value)} />
                 )}
               </Field>
             </div>
@@ -285,7 +313,12 @@ export function EventForm({
           label="Location (optional)"
           hint={
             location.trim() ? (
-              <a href={mapsUrl(location.trim())} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-indigo-600 dark:text-indigo-300">
+              <a
+                href={mapsUrl(location.trim())}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-indigo-600 dark:text-indigo-300"
+              >
                 <MapPin className="size-3.5" aria-hidden /> Open in Maps
               </a>
             ) : undefined
@@ -317,9 +350,7 @@ export function EventForm({
           <span>
             {allDay ? 'Take the day off from work' : 'Takes time away from work'}
             <span className="block text-xs text-slate-500 dark:text-slate-400">
-              {allDay
-                ? 'No work gets planned on this day.'
-                : 'No work gets planned during this time.'}
+              {allDay ? 'No work gets planned on this day.' : 'No work gets planned during this time.'}
             </span>
           </span>
         </label>

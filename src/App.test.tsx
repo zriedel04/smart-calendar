@@ -541,6 +541,47 @@ describe('App', () => {
     );
   });
 
+  it('changes or cancels just one day of a repeating event', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+
+    // Team standup repeats every Monday from Nov 2. Move just the Nov 9 one to 3pm.
+    await user.click(screen.getByRole('button', { name: 'Monday, November 9' }));
+    await user.click(screen.getByRole('button', { name: /^Team standup/ }));
+    let dialog = screen.getByRole('dialog', { name: 'Edit event' });
+    expect(within(dialog).getByRole('radio', { name: 'Only Mon, Nov 9' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).queryByLabelText('Repeats')).not.toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Starts'));
+    await user.type(within(dialog).getByLabelText('Starts'), '15:00');
+    await user.clear(within(dialog).getByLabelText('Ends'));
+    await user.type(within(dialog).getByLabelText('Ends'), '15:30');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('button', { name: 'Monday, November 9' })).toHaveTextContent(/Team standup\s*3pm/);
+    expect(screen.getByRole('button', { name: 'Monday, November 16' })).toHaveTextContent(/Team standup\s*1pm/);
+
+    // Cancel the Nov 16 one; the week after still has it.
+    await user.click(screen.getByRole('button', { name: 'Monday, November 16' }));
+    await user.click(screen.getByRole('button', { name: /^Team standup/ }));
+    dialog = screen.getByRole('dialog', { name: 'Edit event' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete this day' }));
+    expect(screen.getByRole('button', { name: 'Monday, November 16' })).not.toHaveTextContent('Team standup');
+    expect(screen.getByRole('button', { name: 'Monday, November 23' })).toHaveTextContent('Team standup');
+    expect(screen.getByText('Cancelled "Team standup" on Mon, Nov 16')).toBeInTheDocument();
+
+    // Editing every day keeps the days changed or cancelled on their own.
+    await user.click(screen.getByRole('button', { name: 'Monday, November 23' }));
+    await user.click(screen.getByRole('button', { name: /^Team standup/ }));
+    dialog = screen.getByRole('dialog', { name: 'Edit event' });
+    await user.click(within(dialog).getByRole('radio', { name: 'Every day it repeats' }));
+    await user.type(within(dialog).getByLabelText('Name'), ' (team)');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!).events;
+    expect(saved).toContainEqual(expect.objectContaining({ title: 'Team standup (team)', repeat: 'weekly', skip: ['2026-11-09', '2026-11-16'] }));
+    expect(saved).toContainEqual(expect.objectContaining({ title: 'Team standup', date: '2026-11-09', repeat: 'none', start: 15 * 60 }));
+  });
+
   it('keeps the last date of a yearly event when it is edited', async () => {
     const data = createSampleData('2026-11-02');
     data.events = [

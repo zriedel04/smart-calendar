@@ -33,6 +33,10 @@ export type Action =
   | { type: 'event/add'; draft: EventDraft }
   | { type: 'event/update'; id: string; draft: EventDraft }
   | { type: 'event/delete'; id: string }
+  /** Cancels one day of a repeating event. */
+  | { type: 'event/skipDay'; id: string; date: ISODate }
+  /** Changes one day of a repeating event: that day becomes its own event, made from `draft`. */
+  | { type: 'event/changeDay'; id: string; date: ISODate; draft: EventDraft }
   | { type: 'import/add'; tasks: TaskDraft[]; events: EventDraft[] }
   | { type: 'series/add'; draft: SeriesDraft; today: ISODate; replacesTaskId?: string }
   | { type: 'series/update'; id: string; draft: SeriesDraft; today: ISODate }
@@ -239,11 +243,25 @@ function apply(state: AppData, action: Action): AppData {
                 ...action.draft,
                 id: e.id,
                 sourceId: action.draft.sourceId ?? e.sourceId,
+                // Days already cancelled or changed on their own stay that way.
+                ...(e.skip && action.draft.repeat !== 'none' ? { skip: e.skip } : {}),
                 ...(e.feedId ? { feedId: e.feedId, sourceStamp: e.sourceStamp, sourceKey: e.sourceKey } : {}),
               }
             : e,
         ),
       };
+    case 'event/skipDay':
+    case 'event/changeDay': {
+      const series = state.events.find((e) => e.id === action.id);
+      if (!series) return state;
+      const skipped = { ...series, skip: [...new Set([...(series.skip ?? []), action.date])].sort() };
+      const events = state.events.map((e) => (e.id === action.id ? skipped : e));
+      if (action.type === 'event/skipDay') return { ...state, events };
+      // The day's own event is yours, not the link's or the file's, so refreshes leave it alone.
+      const { repeat: _repeat, rule: _rule, until: _until, skip: _skip, sourceId: _id, feedId: _feed, sourceStamp: _stamp, sourceKey: _key, ...rest } =
+        action.draft;
+      return { ...state, events: [...events, { ...rest, repeat: 'none', id: createId() }] };
+    }
     case 'event/delete': {
       const deleted = state.events.find((e) => e.id === action.id);
       return {

@@ -41,6 +41,8 @@ export interface CalendarEvent {
   endDate?: ISODate;
   location?: string;
   notes?: string;
+  /** Days a repeating event doesn't happen on, by the day each run starts: cancelled, or moved to its own event. */
+  skip?: ISODate[];
   /** Defaults to 'busy', the original kind of event (classes and shifts). */
   kind?: EventKind;
   allDay?: boolean;
@@ -88,11 +90,17 @@ export function eventExtraDays(event: CalendarEvent): number {
 }
 
 export function eventOccursOn(event: CalendarEvent, date: ISODate): boolean {
+  return runStartOn(event, date) !== null;
+}
+
+/** The day the run of the event that covers `date` started, or null if it isn't on that day. */
+export function runStartOn(event: CalendarEvent, date: ISODate): ISODate | null {
   const extra = eventExtraDays(event);
   for (let back = 0; back <= extra; back++) {
-    if (eventStartsOn(event, back === 0 ? date : addDays(date, -back))) return true;
+    const start = back === 0 ? date : addDays(date, -back);
+    if (eventStartsOn(event, start)) return start;
   }
-  return false;
+  return null;
 }
 
 /** The nth week of the month a day falls in, from 1; 5 means the last. */
@@ -105,6 +113,7 @@ export function eventStartsOn(event: CalendarEvent, date: ISODate): boolean {
   const diff = daysBetween(event.date, date);
   if (diff < 0) return false;
   if (event.until && date > event.until) return false;
+  if (event.skip?.includes(date)) return false;
   const rule = event.rule && REPEAT_RULES.includes(event.rule) ? event.rule : undefined;
   if (rule === 'daily') return true;
   if (rule === 'weekdays') {
