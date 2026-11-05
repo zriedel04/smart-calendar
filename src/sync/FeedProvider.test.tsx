@@ -99,6 +99,32 @@ describe('Calendar links', () => {
     expect(fetchFeed).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a hidden course on offer when the link has nothing else', async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    data.feeds = [
+      {
+        id: 'f1',
+        url: LINK,
+        name: 'Canvas',
+        estimateMinutes: 60,
+        addedAt: '2026-10-01T00:00:00.000Z',
+        courses: ['MAT 343'],
+        hiddenCourses: ['MAT 343'],
+      },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setup(ME, async () => calendar(assignment('2', 'Section 5.4 [2026FallC-T-MAT343-71234]', '20261107T065900Z')), {
+      f1: { at: Date.now() },
+    });
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    const card = (await screen.findByRole('heading', { name: 'Calendar links' })).closest('section')!;
+    const math = await within(card).findByRole('button', { name: 'MAT 343' });
+    expect(math).toHaveAttribute('aria-pressed', 'false');
+    await user.click(math);
+    await waitFor(() => expect(stored().tasks.some((t) => t.title === 'Section 5.4 · MAT 343')).toBe(true));
+  });
+
   it("shows why a link couldn't be added", async () => {
     const user = userEvent.setup();
     setup(ME, async () => {

@@ -1,6 +1,7 @@
 import { Link2, RefreshCw, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useStore } from '../state/context';
+import type { CalendarFeed } from '../state/types';
 import { useSync } from '../sync/context';
 import { useFeeds, type FeedStatus } from '../sync/feedContext';
 import { cx } from './cx';
@@ -14,6 +15,15 @@ function statusText(status: FeedStatus | undefined, refreshing: boolean): { text
   const minutes = Math.floor((Date.now() - status.at) / 60_000);
   const ago = minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.floor(minutes / 60)}h ago`;
   return { text: `Updated ${ago}`, problem: false };
+}
+
+/**
+ * The courses to offer for a link: those in its feed plus any you hid, so a hidden course can always
+ * be turned back on. A link with a single course you haven't hidden has nothing to choose.
+ */
+function courseChoices(feed: CalendarFeed): string[] {
+  const all = [...new Set([...(feed.courses ?? []), ...(feed.hiddenCourses ?? [])])].sort();
+  return all.length > 1 || (feed.hiddenCourses?.length ?? 0) > 0 ? all : [];
 }
 
 /** Calendar links from Canvas, Google Calendar or Outlook that keep themselves up to date. */
@@ -85,11 +95,11 @@ export function CalendarLinksCard() {
                     <Trash2 className="size-4" />
                   </Button>
                 </div>
-                {feed.courses && feed.courses.length > 1 && (
+                {courseChoices(feed).length > 0 && (
                   <div className="mt-2 pl-7">
                     <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Courses to include</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {feed.courses.map((course) => {
+                      {courseChoices(feed).map((course) => {
                         const shown = !feed.hiddenCourses?.includes(course);
                         return (
                           <button
