@@ -117,8 +117,6 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
     const keyed = runs.flatMap((run) =>
       toEventDrafts(run).map((d, day) => ({ d, key: `${uid}:${oneOff ? '' : (run.sourceDate ?? run.date)}+${day}` })),
     );
-    const drafts = keyed.map((k) => k.d);
-    const stamp = JSON.stringify(drafts);
     const group = events.filter((e) => e.sourceId === uid && ours(e));
     const fresh = () =>
       keyed
@@ -126,7 +124,7 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
           ...d,
           id: feedItemId(feed.id, uid, key.slice(uid.length + 1)),
           feedId: feed.id,
-          sourceStamp: stamp,
+          sourceStamp: JSON.stringify(d),
           sourceKey: key,
         }))
         .filter((e) => !dismissed.has(dismissKey(e)));
@@ -137,30 +135,45 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
         // then to the runs left in date order; runs the file didn't have are added.
         const ordered = [...group].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
         const left = [...keyed].sort((a, b) => a.d.date.localeCompare(b.d.date) || a.d.start - b.d.start);
-        const keyOf = new Map<CalendarEvent, string>();
+        const matched = new Map<CalendarEvent, (typeof keyed)[number]>();
         const take = (e: CalendarEvent, i: number) => {
           if (i < 0) return;
-          keyOf.set(e, left[i]!.key);
+          matched.set(e, left[i]!);
           left.splice(i, 1);
         };
         for (const e of ordered) take(e, left.findIndex((k) => k.d.date === e.date));
-        for (const e of ordered) if (!keyOf.has(e)) take(e, left.length ? 0 : -1);
-        for (const e of ordered) if (!keyOf.has(e)) keyOf.set(e, `${uid}:${oneOff ? '' : e.date}+0`);
+        for (const e of ordered) if (!matched.has(e)) take(e, left.length ? 0 : -1);
         const missing = new Set(left.map((k) => k.key));
         events = [
-          ...events.map((e) => (keyOf.has(e) ? { ...e, feedId: feed.id, sourceStamp: stamp, sourceKey: keyOf.get(e)! } : e)),
+          ...events.map((e) => {
+            if (!group.includes(e)) return e;
+            const k = matched.get(e);
+            const sourceKey = k?.key ?? `${uid}:${oneOff ? '' : e.date}+0`;
+            return { ...e, feedId: feed.id, sourceStamp: JSON.stringify(k?.d ?? null), sourceKey };
+          }),
           ...fresh().filter((e) => missing.has(e.sourceKey!)),
         ];
         changed = true;
-      } else if (group.some((e) => e.sourceStamp !== stamp)) {
-        // Each event keeps its id, so an edit to it on another device merges into it instead of
-        // leaving a second copy.
-        const idOf = new Map(group.map((e) => [e.sourceKey, e.id]));
-        events = [
-          ...events.filter((e) => !group.includes(e)),
-          ...fresh().map((e) => ({ ...e, id: idOf.get(e.sourceKey) ?? e.id })),
-        ];
-        changed = true;
+      } else {
+        // Each event follows its own run and day: only what the link changed about it is updated, so
+        // your edits to it stay unless the link changes the same thing. It keeps its id, so an edit to
+        // it on another device merges into it instead of leaving a second copy.
+        const byKey = new Map(group.map((e) => [e.sourceKey, e]));
+        const keys = new Set(keyed.map((k) => k.key));
+        const next: CalendarEvent[] = [];
+        for (const e of fresh()) {
+          const had = byKey.get(e.sourceKey);
+          if (!had) next.push(e);
+          else if (had.sourceStamp === e.sourceStamp) next.push(had);
+          else next.push({ ...followSource(had, had.sourceStamp, e), sourceStamp: e.sourceStamp });
+        }
+        // A run the link dropped goes, unless it's already over.
+        const dropped = group.filter((e) => !keys.has(e.sourceKey!));
+        const over = dropped.filter((e) => eventOver(e, today));
+        if (over.length < dropped.length || next.some((e) => !group.includes(e))) {
+          events = [...events.filter((e) => !group.includes(e)), ...next, ...over];
+          changed = true;
+        }
       }
     } else if (!runs.every((run) => isPast(run, 'event', today))) {
       added.events.push(...fresh());
@@ -189,7 +202,27 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
   return { ...data, tasks: [...tasks, ...added.tasks], events: [...events, ...added.events] };
 }
 
-/** Remembers an item from a link that you deleted, so the next refresh doesn't add it again. */
+/**
+ * `item` with what the link changed since `stamp` (the link's last version of it) taken from
+ * `latest`, and everything else, including your edits, left as it is.
+ */
+function followSource(item: CalendarEvent, stamp: string | undefined, latest: CalendarEvent): CalendarEvent {
+  let before: Record<string, unknown> = {};
+  try {
+    before = (stamp && JSON.parse(stamp)) || {};
+  } catch {
+    // An unreadable stamp means the link's version is unknown, so every field follows the link.
+  }
+  const now: Record<string, unknown> = JSON.parse(latest.sourceStamp!);
+  const next: Record<string, unknown> = { ...item };
+  for (const field of new Set([...Object.keys(before), ...Object.keys(now)])) {
+    if (JSON.stringify(before[field]) === JSON.stringify(now[field])) continue;
+    if (now[field] === undefined) delete next[field];
+    else next[field] = now[field];
+  }
+  return next as unknown as CalendarEvent;
+}
+
 /** The item as if imported from a file: kept, but no longer tied to a link. */
 export function detachFromFeed<T extends Task | CalendarEvent>(item: T): T {
   const { feedId: _feed, sourceStamp: _stamp, ...rest } = item;
@@ -197,6 +230,7 @@ export function detachFromFeed<T extends Task | CalendarEvent>(item: T): T {
   return rest as T;
 }
 
+/** Remembers an item from a link that you deleted, so the next refresh doesn't add it again. */
 export function dismissFromFeed(data: AppData, item: Task | CalendarEvent): CalendarFeed[] | undefined {
   if (!item.feedId || !item.sourceId || !data.feeds) return data.feeds;
   const key = dismissKey(item);

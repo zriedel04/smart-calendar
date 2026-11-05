@@ -217,6 +217,35 @@ describe('calendar links', () => {
     expect(apply(mergeAppData(base, deleted, phone), la).events).toEqual([]);
   });
 
+  it("keeps your edits to a repeating event when only the link's look-ahead grows", () => {
+    const ics = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:standup', 'SUMMARY:Standup', 'DTSTART;TZID=America/New_York:20261102T100000',
+      'DTEND;TZID=America/New_York:20261102T103000', 'RRULE:FREQ=WEEKLY', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const readOn = (day: string) => {
+      vi.stubEnv('TZ', 'UTC');
+      try {
+        return parseIcs(ics, new Date(`${day}T12:00:00Z`));
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    };
+    const [early, later] = [readOn('2026-11-01'), readOn('2026-11-15')];
+    expect(later.length).toBeGreaterThan(early.length);
+    let data = apply(withFeed(), early, '2026-11-01');
+    const edited = data.events[0]!;
+    data = reducer(data, { type: 'event/update', id: edited.id, draft: { ...edited, title: 'Team standup' } });
+    data = apply(data, later, '2026-11-15');
+    expect(data.events.find((e) => e.id === edited.id)!.title).toBe('Team standup');
+    expect(data.events.filter((e) => e.title === 'Standup').length).toBe(later.length - 1);
+  });
+
+  it("updates only what the link changed about an event, keeping your edits", () => {
+    let data = apply(withFeed(), [lecture('l1', '2026-11-03')]);
+    const id = data.events[0]!.id;
+    data = reducer(data, { type: 'event/update', id, draft: { ...data.events[0]!, title: 'Bio (room 210)' } });
+    data = apply(data, [lecture('l1', '2026-11-03', 660)]);
+    expect(data.events).toMatchObject([{ id, title: 'Bio (room 210)', start: 660, end: 735 }]);
+  });
+
   it('adds each item once when two devices refresh the same link before syncing', () => {
     const base = withFeed();
     const entries = [assignment('a1', 'Essay 2', '2026-11-06'), lecture('l1', '2026-11-03')];
