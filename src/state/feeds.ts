@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '../lib/availability';
 import type { ISODate } from '../lib/dates';
-import type { IcsEntry } from '../lib/ics';
+import { splitCourse, type IcsEntry } from '../lib/ics';
 import { isPast, toEventDrafts, toTaskDraft } from './calendarImport';
 import type { AppData, CalendarFeed, Task } from './types';
 
@@ -61,6 +61,15 @@ function eventOver(event: CalendarEvent, today: ISODate): boolean {
 }
 
 /**
+ * A title taken over from a file import or an earlier link: the link's short form when it's only
+ * the long Canvas form of the same title ("Essay [2026FallC-T-ENG102-…]"), or as it was if you
+ * changed it.
+ */
+function shortened(title: string, linkTitle: string): string {
+  return title !== linkTitle && splitCourse(title).title === linkTitle ? linkTitle : title;
+}
+
+/**
  * Brings what a calendar link added up to date with its latest copy:
  * - new assignments become tasks (with the link's estimate) and other entries become events,
  * - an item the link changed gets its new title, date or time, unless only you changed it,
@@ -103,7 +112,7 @@ export function applyFeed(data: AppData, feedId: string, allEntries: readonly Ic
       if (i >= 0) {
         const task = tasks[i]!;
         if (!task.feedId) {
-          tasks[i] = { ...task, feedId: feed.id, sourceStamp: stamp };
+          tasks[i] = { ...task, title: shortened(task.title, draft.title), feedId: feed.id, sourceStamp: stamp };
           changed = true;
         } else if (task.sourceStamp !== stamp) {
           tasks[i] = { ...task, title: draft.title, dueDate: draft.dueDate, sourceStamp: stamp };
@@ -155,7 +164,8 @@ export function applyFeed(data: AppData, feedId: string, allEntries: readonly Ic
             if (!group.includes(e)) return e;
             const k = matched.get(e);
             const sourceKey = k?.key ?? `${uid}:${oneOff ? '' : e.date}+0`;
-            return { ...e, feedId: feed.id, sourceStamp: JSON.stringify(k?.d ?? null), sourceKey };
+            const title = k ? shortened(e.title, k.d.title) : e.title;
+            return { ...e, title, feedId: feed.id, sourceStamp: JSON.stringify(k?.d ?? null), sourceKey };
           }),
           ...fresh().filter((e) => missing.has(e.sourceKey!)),
         ];
