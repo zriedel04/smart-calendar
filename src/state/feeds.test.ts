@@ -184,6 +184,17 @@ describe('calendar links', () => {
     expect(apply(data, [lecture('mwf', '2026-11-02'), lecture('mwf', '2026-11-04')])).toBe(data);
   });
 
+  it("doesn't duplicate a taken-over event when the link changes it on one device and it's edited on another", () => {
+    const talk = (start: number): IcsEntry => ({ ...lecture('t1', '2026-11-05', start), title: 'Guest talk', repeat: 'none', until: undefined });
+    let base = reducer(createEmptyData(), { type: 'event/add', draft: { title: 'Guest talk', date: '2026-11-05', start: 600, end: 675, repeat: 'none', sourceId: 't1' } });
+    base = apply(withFeed(base), [talk(600)]);
+    const event = base.events[0]!;
+    const laptop = apply(base, [talk(660)]);
+    const phone = reducer(base, { type: 'event/update', id: event.id, draft: { title: 'Guest talk (room 4)', date: event.date, start: event.start, end: event.end, repeat: 'none' } });
+    expect(mergeAppData(base, laptop, phone).events).toHaveLength(1);
+    expect(laptop.events[0]!.id).toBe(event.id);
+  });
+
   it('adds each item once when two devices refresh the same link before syncing', () => {
     const base = withFeed();
     const entries = [assignment('a1', 'Essay 2', '2026-11-06'), lecture('l1', '2026-11-03')];

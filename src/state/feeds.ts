@@ -152,7 +152,13 @@ export function applyFeed(data: AppData, feedId: string, entries: readonly IcsEn
         ];
         changed = true;
       } else if (group.some((e) => e.sourceStamp !== stamp)) {
-        events = [...events.filter((e) => !group.includes(e)), ...fresh()];
+        // Each event keeps its id, so an edit to it on another device merges into it instead of
+        // leaving a second copy.
+        const idOf = new Map(group.map((e) => [e.sourceKey, e.id]));
+        events = [
+          ...events.filter((e) => !group.includes(e)),
+          ...fresh().map((e) => ({ ...e, id: idOf.get(e.sourceKey) ?? e.id })),
+        ];
         changed = true;
       }
     } else if (!runs.every((run) => isPast(run, 'event', today))) {
