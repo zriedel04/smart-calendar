@@ -38,6 +38,7 @@ Add what you need to get done, how long you think it'll take, and when it's due.
 - **Events, plans and birthdays.** Add classes, shifts, plans with friends and birthdays, timed or all day, one-time, weekly (with an end date, like the end of the semester), monthly or yearly. Choose whether each one takes time away from work.
 - **Import from Canvas or any calendar.** Load an .ics file from Canvas, Google Calendar, Apple Calendar or Outlook. Assignments come in as tasks (you just add the hours), everything else as events, and you see a preview first. Importing the same file again won't add duplicates.
 - **Quick to set up, easy to fix mistakes.** Pick your usual hours with one tap on first launch. Ticked something off by accident, or deleted the wrong task? Hit Undo.
+- **Clear things out fast.** Pick tasks on a day to delete them together, pick whole days on the month calendar to clear everything due on them, or delete the whole calendar from the Danger zone after typing a confirmation.
 - **Early warnings.** If a task can't be finished before it's due with your current hours, it's flagged as at risk.
 - **Suggested times.** Each item on Today's list shows when to work on it, like "1:30pm – 4:30pm", fitted around your classes and plans and starting from now. The Week view shows start times too. Turn them off with one tap.
 - **Pick the day.** Drag a task to another day in the Week view, or set "Work on it on" when you add it, and it goes first on that day's list. Whatever doesn't fit carries on to the next days.

@@ -24,10 +24,13 @@ export function TaskForm({
   task,
   series: seriesToEdit,
   today,
+  defaultDue,
   onClose,
   onAddMany,
 }: {
   task?: Task;
+  /** The due date a new task starts with, such as the day picked on the month calendar. */
+  defaultDue?: ISODate;
   /** A repeating task to edit when there's no day's copy of it to open. */
   series?: TaskSeries;
   today: ISODate;
@@ -41,7 +44,7 @@ export function TaskForm({
     seriesToEdit ?? (task?.seriesId ? data.series?.find((s) => s.id === task.seriesId) : undefined);
   const source = series ?? task;
   const [title, setTitle] = useState(source?.title ?? '');
-  const [dueDate, setDueDate] = useState(series?.startDate ?? task?.dueDate ?? addDays(today, 7));
+  const [dueDate, setDueDate] = useState(series?.startDate ?? task?.dueDate ?? defaultDue ?? addDays(today, 7));
   const [hours, setHours] = useState(source ? String(source.estimateMinutes / 60) : '');
   const [notes, setNotes] = useState(source?.notes ?? '');
   const [repeat, setRepeat] = useState<RepeatChoice>(series ? choiceFor(series.days) : 'none');

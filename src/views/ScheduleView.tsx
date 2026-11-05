@@ -1,5 +1,5 @@
-import { CalendarPlus, Download, Pencil, RotateCcw, Upload } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { CalendarPlus, Download, Pencil, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
 import { eventBlocksWork, type CalendarEvent } from '../lib/availability';
 import { formatDate, WEEKDAY_NAMES, WEEKDAYS_MONDAY_FIRST, weekdayOf, type ISODate } from '../lib/dates';
 import { formatDuration, formatRange, normalizeRanges, totalMinutes } from '../lib/time';
@@ -7,9 +7,11 @@ import { AccountCard } from '../components/AccountCard';
 import { CalendarLinksCard } from '../components/CalendarLinksCard';
 import { HoursEditor } from '../components/HoursEditor';
 import { eventRepeatLabel, eventTime } from '../components/eventStyles';
-import { Button, Card, CardHeader, EventIcon } from '../components/ui';
+import { cx } from '../components/cx';
+import { inputClass } from '../components/styles';
+import { Button, Card, CardHeader, EventIcon, Modal } from '../components/ui';
+import { useSync } from '../sync/context';
 import { useStore } from '../state/context';
-import { createEmptyData } from '../state/defaults';
 import { parseAppData } from '../state/storage';
 
 export function ScheduleView({
@@ -56,11 +58,6 @@ export function ScheduleView({
     }
   }
 
-  function eraseAll() {
-    if (window.confirm('Erase all tasks, hours and events from this browser? This cannot be undone.')) {
-      dispatch({ type: 'data/replace', data: createEmptyData() });
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -202,9 +199,6 @@ export function ScheduleView({
           <Button variant="ghost" onClick={onLoadSample}>
             Load sample tasks
           </Button>
-          <Button variant="danger" onClick={eraseAll} className="sm:ml-auto">
-            Erase everything
-          </Button>
           <input
             ref={fileInput}
             type="file"
@@ -219,6 +213,77 @@ export function ScheduleView({
         </div>
         {importError && <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{importError}</p>}
       </Card>
+
+      <DangerZone />
     </div>
+  );
+}
+
+const CONFIRM_WORD = 'delete';
+
+/** Deleting the whole calendar, behind a dialog where you type a word, so it can't happen by a stray click. */
+function DangerZone() {
+  const { data, dispatch } = useStore();
+  const { email } = useSync();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  // Stable, so the dialog doesn't move focus out of the box on each keystroke.
+  const close = useCallback(() => {
+    setOpen(false);
+    setTyped('');
+  }, []);
+  const counts = [
+    `${data.tasks.length} ${data.tasks.length === 1 ? 'task' : 'tasks'}`,
+    `${data.events.length} ${data.events.length === 1 ? 'event' : 'events'}`,
+    ...(data.feeds?.length ? [`${data.feeds.length} calendar ${data.feeds.length === 1 ? 'link' : 'links'}`] : []),
+  ];
+  return (
+    <Card className="border-rose-200 dark:border-rose-500/30">
+      <CardHeader
+        title="Danger zone"
+        description="Delete everything on your calendar: tasks, logged work, events, repeating tasks and calendar links. Your weekly work hours stay."
+      />
+      <Button variant="danger" onClick={() => setOpen(true)}>
+        <Trash2 className="size-4" /> Delete my calendar
+      </Button>
+      {open && (
+        <Modal
+          title="Delete your whole calendar?"
+          onClose={close}
+          footer={
+            <>
+              <Button variant="ghost" onClick={close}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={typed.trim().toLowerCase() !== CONFIRM_WORD}
+                onClick={() => {
+                  dispatch({ type: 'data/clear' });
+                  close();
+                }}
+              >
+                Delete everything
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            This deletes {counts.length > 1 ? `${counts.slice(0, -1).join(', ')} and ${counts.at(-1)}` : counts[0]}
+            {email ? ', on every device signed in to your account' : ''}. You can undo it right after, but not later.
+          </p>
+          <label htmlFor="confirm-delete" className="mt-4 mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Type <span className="font-mono font-semibold">{CONFIRM_WORD}</span> to confirm
+          </label>
+          <input
+            id="confirm-delete"
+            autoComplete="off"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            className={cx(inputClass, 'w-full')}
+          />
+        </Modal>
+      )}
+    </Card>
   );
 }

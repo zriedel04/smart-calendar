@@ -1,6 +1,7 @@
 import type { CalendarEvent } from '../lib/availability';
 import { addDays, type ISODate, type Weekday } from '../lib/dates';
 import type { TimeRange } from '../lib/time';
+import { createEmptyData } from './defaults';
 import { createId } from './ids';
 import { fillSeries, startedTaskIds } from './recurring';
 import type { IcsEntry } from '../lib/ics';
@@ -41,6 +42,8 @@ export type Action =
   | { type: 'feed/remove'; id: string }
   | { type: 'feed/hideCourse'; id: string; course: string; hidden: boolean }
   | { type: 'feed/apply'; id: string; entries: IcsEntry[]; today: ISODate; at: string }
+  | { type: 'task/deleteMany'; ids: string[] }
+  | { type: 'data/clear' }
   | { type: 'data/replace'; data: AppData };
 
 /** Whole minutes a timer has run by `at`. */
@@ -313,6 +316,20 @@ function apply(state: AppData, action: Action): AppData {
     }
     case 'feed/apply':
       return applyFeed(state, action.id, action.entries, action.today, action.at);
+    case 'task/deleteMany':
+      // Each goes the way deleting it on its own would: a day of a repeating task is skipped, so
+      // the series doesn't make it again, and an item from a calendar link is remembered as deleted.
+      // A skipped day with logged time would be kept as finished, so its time goes too: asked to
+      // delete it, the day should be gone (Undo brings it back).
+      return action.ids.reduce((next, id) => {
+        const task = next.tasks.find((t) => t.id === id);
+        if (!task) return next;
+        if (!task.seriesId) return reducer(next, { type: 'task/delete', id });
+        return reducer({ ...next, logs: next.logs.filter((l) => l.taskId !== id) }, { type: 'task/skip', id });
+      }, state);
+    case 'data/clear':
+      // Everything goes except your weekly work hours.
+      return { ...createEmptyData(), weeklyHours: state.weeklyHours };
     case 'data/replace':
       return action.data;
   }
