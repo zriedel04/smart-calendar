@@ -37,7 +37,7 @@ type Dialog =
   | { kind: 'task'; task?: Task; series?: TaskSeries; due?: ISODate }
   | { kind: 'bulk' }
   | { kind: 'day'; date?: ISODate }
-  | { kind: 'event'; event?: CalendarEvent; date?: ISODate }
+  | { kind: 'event'; event?: CalendarEvent; date?: ISODate; occurrence?: ISODate }
   | { kind: 'import' }
   | null;
 
@@ -79,7 +79,7 @@ export default function App() {
   const editTask = (task: Task) => setDialog({ kind: 'task', task });
   const editSeries = (series: TaskSeries) => setDialog({ kind: 'task', series });
   const editDay = (date?: ISODate) => setDialog({ kind: 'day', date });
-  const editEvent = (event?: CalendarEvent) => setDialog({ kind: 'event', event });
+  const editEvent = (event?: CalendarEvent, occurrence?: ISODate) => setDialog({ kind: 'event', event, occurrence });
   const addEventOn = (date: ISODate) => setDialog({ kind: 'event', date });
   const importCalendar = () => setDialog({ kind: 'import' });
   const loadSample = () => {
@@ -177,7 +177,7 @@ export default function App() {
       {dialog?.kind === 'bulk' && <BulkTaskForm today={today} onClose={close} />}
       {dialog?.kind === 'day' && <DayHoursDialog date={dialog.date} today={today} onClose={close} />}
       {dialog?.kind === 'event' && (
-        <EventForm event={dialog.event} defaultDate={dialog.date} today={today} onClose={close} />
+        <EventForm event={dialog.event} defaultDate={dialog.date} occurrence={dialog.occurrence} today={today} onClose={close} />
       )}
       {dialog?.kind === 'import' && <ImportCalendarDialog today={today} onClose={close} />}
       <SyncConflictDialog />

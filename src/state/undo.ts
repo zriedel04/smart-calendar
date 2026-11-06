@@ -32,6 +32,8 @@ export function undoLabel(action: Action, before: AppData): string | null {
     }
     case 'timer/cancel':
       return before.timer ? `Stopped the timer on "${task(before.timer.taskId)}" without logging` : null;
+    case 'event/skipDay':
+      return `Cancelled "${before.events.find((e) => e.id === action.id)?.title ?? 'event'}" on ${formatDate(action.date, { weekday: 'short', month: 'short', day: 'numeric' })}`;
     case 'event/delete':
       return `Deleted "${before.events.find((e) => e.id === action.id)?.title ?? 'event'}"`;
     case 'task/deleteMany': {

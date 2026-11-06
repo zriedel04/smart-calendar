@@ -139,6 +139,7 @@ export function parseAppData(json: string): AppData {
           (e.rule === undefined || typeof e.rule === 'string') &&
           (e.location === undefined || typeof e.location === 'string') &&
           (e.notes === undefined || typeof e.notes === 'string') &&
+          (e.skip === undefined || (Array.isArray(e.skip) && e.skip.every(isISODate))) &&
           (e.allDay === undefined || typeof e.allDay === 'boolean') &&
           (e.blocksWork === undefined || typeof e.blocksWork === 'boolean'),
       )

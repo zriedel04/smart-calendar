@@ -1,6 +1,6 @@
 import { Check, ChevronLeft, ChevronRight, Flag, Plus, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { eventKind, eventsOn, type CalendarEvent } from '../lib/availability';
+import { eventKind, eventsOn, runStartOn, type CalendarEvent } from '../lib/availability';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
 import { holidaysOn } from '../lib/holidays';
 import { priorityOf, type Priority } from '../lib/priority';
@@ -48,7 +48,8 @@ export function MonthView({
   plan: Plan;
   onEditTask: (task: Task) => void;
   onEditDay: (date: ISODate) => void;
-  onEditEvent: (event: CalendarEvent) => void;
+  /** `occurrence` is the day the picked run of a repeating event started. */
+  onEditEvent: (event: CalendarEvent, occurrence?: ISODate) => void;
   onAddEvent: (date: ISODate) => void;
   /** Tells the app which day is picked, so its Event and Task buttons use that day. */
   onSelectDay?: (date: ISODate) => void;
@@ -370,7 +371,7 @@ export function MonthView({
               <li key={e.id}>
                 <button
                   type="button"
-                  onClick={() => onEditEvent(e)}
+                  onClick={() => onEditEvent(e, runStartOn(e, selected) ?? undefined)}
                   className={cx('flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm', EVENT_CHIP[eventKind(e)])}
                 >
                   <EventIcon event={e} className="size-4" />
