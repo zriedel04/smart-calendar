@@ -1,5 +1,5 @@
 import type { CloudStore } from './engine';
-import { signInErrorMessage } from './errors';
+import { ALREADY_SIGNED_UP, passwordErrorMessage, signInErrorMessage } from './errors';
 
 export interface SyncUser {
   id: string;
@@ -13,8 +13,12 @@ export interface SyncBackend {
   onUserChange(callback: (user: SyncUser | null) => void): () => void;
   /** Emails a sign-in link. Resolves to an error message, or null once it's sent. */
   signIn(email: string): Promise<string | null>;
-  /** Signs in with the code from the sign-in email. Resolves to an error message, or null once signed in. */
-  verifyCode(email: string, code: string): Promise<string | null>;
+  /** Resolves to an error message, or null once signed in. */
+  signInWithPassword(email: string, password: string): Promise<string | null>;
+  /** Makes an account. Resolves to an error message, 'confirm' when the account must be confirmed by email first, or null once signed in. */
+  signUp(email: string, password: string): Promise<string | 'confirm' | null>;
+  /** Sets or changes the signed-in account's password. Resolves to an error message, or null once saved. */
+  setPassword(password: string): Promise<string | null>;
   signOut(): Promise<void>;
   store(userId: string): CloudStore;
   /** Calls back when another device saves this account's calendar. */
@@ -63,13 +67,27 @@ export function supabaseBackend(): SyncBackend {
       });
       return error ? signInErrorMessage(error) : null;
     },
-    async verifyCode(email, code) {
+    async signInWithPassword(email, password) {
       const { db } = await load();
-      const { error } = await db.auth.verifyOtp({ email, token: code, type: 'email' });
-      if (!error) return null;
-      return error.code === 'otp_expired' || error.status === 403
-        ? 'That code has expired or is wrong. Check the newest email, or send a new one.'
-        : signInErrorMessage(error);
+      const { error } = await db.auth.signInWithPassword({ email, password });
+      return error ? passwordErrorMessage(error) : null;
+    },
+    async signUp(email, password) {
+      const { db } = await load();
+      const { data, error } = await db.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
+      });
+      if (error) return passwordErrorMessage(error);
+      // With email confirmation on, an address that already has an account comes back with no identities.
+      if (data.user && data.user.identities?.length === 0) return ALREADY_SIGNED_UP;
+      return data.session ? null : 'confirm';
+    },
+    async setPassword(password) {
+      const { db } = await load();
+      const { error } = await db.auth.updateUser({ password });
+      return error ? passwordErrorMessage(error) : null;
     },
     async signOut() {
       const { db } = await load();
