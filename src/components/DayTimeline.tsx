@@ -86,13 +86,12 @@ export function DayTimeline({
             width: `calc(${100 / lanes}% - 8px)`,
           };
           const title = item.kind === 'event' ? item.event.title : item.block.task.title;
-          // A short block has room for one line, so work blocks drop the "Work" label their dashed border already shows.
-          const detail =
+          const label =
             item.kind === 'event'
               ? [formatRange(item.event), item.event.location].filter(Boolean).join(' · ')
-              : [!short && 'Work', formatRange(item.block.range), !short && item.block.note].filter(Boolean).join(' · ');
-          const label =
-            item.kind === 'event' ? detail : ['Work', formatRange(item.block.range), item.block.note].filter(Boolean).join(' · ');
+              : ['Work', formatRange(item.block.range), item.block.note].filter(Boolean).join(' · ');
+          // A short block has one line: just the start time, or only the title in a narrow column.
+          const detail = !short ? label : lanes > 1 ? '' : formatClock(start);
           return (
             <button
               key={item.kind === 'event' ? `e-${item.event.id}` : `w-${item.block.task.id}-${start}`}
@@ -109,7 +108,7 @@ export function DayTimeline({
               style={style}
             >
               <span className={cx('min-w-0 truncate font-semibold', short ? 'text-xs' : 'text-[13px]')}>{title}</span>
-              <span className={cx('min-w-0 text-[11px] opacity-80', short ? 'shrink-0' : 'line-clamp-2')}>{detail}</span>
+              {detail && <span className={cx('min-w-0 text-[11px] opacity-80', short ? 'shrink-0' : 'line-clamp-2')}>{detail}</span>}
             </button>
           );
         })}
