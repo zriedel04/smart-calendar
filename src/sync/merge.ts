@@ -176,8 +176,31 @@ function mergeSkips(base: AppData, local: AppData, remote: AppData, data: AppDat
     remote.events,
     data.events,
     (e) => e.skip,
-    ({ skip: _skip, ...rest }, skip) => (skip.length ? { ...rest, skip } : rest),
+    // An event that no longer repeats has no days to skip; a skip would hide its only day.
+    ({ skip: _skip, ...rest }, skip) => (skip.length && rest.repeat !== 'none' ? { ...rest, skip } : rest),
   );
+}
+
+/**
+ * A day of a repeating event changed on its own becomes an event with the id `<series>@<day>`. If
+ * this device cancelled that same day while the other device changed it, both skip the day but
+ * only the other added the changed event; this device wins, so the day stays cancelled.
+ */
+function keepCancelledDays(base: AppData, local: AppData, remote: AppData, data: AppData) {
+  const ids = (d: AppData) => new Set(d.events.map((e) => e.id));
+  const inBase = ids(base);
+  const inLocal = ids(local);
+  const skippedHere = (id: string, day: string) => {
+    const before = base.events.find((e) => e.id === id)?.skip ?? [];
+    const now = local.events.find((e) => e.id === id)?.skip ?? [];
+    return now.includes(day) && !before.includes(day);
+  };
+  const remoteOnly = new Set(remote.events.filter((e) => !inBase.has(e.id) && !inLocal.has(e.id)).map((e) => e.id));
+  data.events = data.events.filter((e) => {
+    if (!remoteOnly.has(e.id)) return true;
+    const at = e.id.lastIndexOf('@');
+    return at < 0 || !skippedHere(e.id.slice(0, at), e.id.slice(at + 1));
+  });
 }
 
 /**
@@ -296,6 +319,7 @@ export function mergeAppData(base: AppData, local: AppData, remote: AppData): Ap
   }
 
   mergeSkips(base, local, remote, merged);
+  keepCancelledDays(base, local, remote, merged);
   keepStartedCopies(base, local, remote, merged);
   dedupeCopies(merged);
   dropCopiesOfStoppedSeries(base, merged);
