@@ -1,24 +1,13 @@
 import { CheckCircle2, MapPin, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { nextDayOf, type CalendarEvent } from '../lib/availability';
+import type { CalendarEvent } from '../lib/availability';
+import { searchData } from '../lib/search';
 import { formatDate, type ISODate } from '../lib/dates';
 import { useStore } from '../state/context';
 import type { Task, TaskSeries } from '../state/types';
 import { EventIcon, Modal } from './ui';
 import { eventRepeatLabel, eventTime } from './eventStyles';
 import { inputClass } from './styles';
-
-const MAX_RESULTS = 30;
-
-/** Lowercased, without accents, so "cafe" finds "Café". */
-function fold(text: string): string {
-  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-}
-
-function matches(words: string[], ...fields: (string | undefined)[]): boolean {
-  const haystack = fold(fields.filter(Boolean).join(' '));
-  return words.every((w) => haystack.includes(w));
-}
 
 /** Finds tasks and events by name, place or notes. */
 export function SearchDialog({
@@ -36,35 +25,15 @@ export function SearchDialog({
 }) {
   const { data } = useStore();
   const [query, setQuery] = useState('');
-  const results = useMemo(() => {
-    const words = fold(query).split(/\s+/).filter(Boolean);
-    if (words.length === 0) return null;
-    const events = data.events
-      .filter((e) => matches(words, e.title, e.location, e.notes))
-      .map((e) => ({ event: e, next: nextDayOf(e, today) }))
-      // Coming up first, soonest first; then ones that are over, latest first.
-      .sort((a, b) =>
-        a.next && b.next ? a.next.localeCompare(b.next) : a.next ? -1 : b.next ? 1 : b.event.date.localeCompare(a.event.date),
-      )
-      .slice(0, MAX_RESULTS);
-    // One entry per repeating task rather than one for each of its days.
-    const seenSeries = new Set<string>();
-    // Sorted before dropping repeats, so a repeating task shows its next open day, not an old finished one.
-    const tasks = data.tasks
-      .filter((t) => matches(words, t.title, t.notes))
-      .sort((a, b) => Number(Boolean(a.completedAt)) - Number(Boolean(b.completedAt)) || a.dueDate.localeCompare(b.dueDate))
-      .filter((t) => !t.seriesId || (!seenSeries.has(t.seriesId) && seenSeries.add(t.seriesId)))
-      .slice(0, MAX_RESULTS);
-    // A repeating task that starts later has no copies yet, so it's found by its own details.
-    const withCopies = new Set(data.tasks.flatMap((t) => (t.seriesId ? [t.seriesId] : [])));
-    const series = (data.series ?? [])
-      .filter((s) => !withCopies.has(s.id) && matches(words, s.title, s.notes))
-      .slice(0, MAX_RESULTS);
-    return { events, tasks, series };
-  }, [query, data.events, data.tasks, data.series, today]);
+  const results = useMemo(() => searchData(data, query, today), [data, query, today]);
 
   const day = (date: ISODate) =>
-    formatDate(date, { weekday: 'short', month: 'short', day: 'numeric', ...(date.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {}) });
+    formatDate(date, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      ...(date.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {}),
+    });
 
   return (
     <Modal title="Search" onClose={onClose}>
@@ -128,7 +97,7 @@ export function SearchDialog({
         <section className="mt-4">
           <h3 className="mb-1 px-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">Tasks</h3>
           <ul>
-            {results.tasks.map((task) => (
+            {results.tasks.map(({ task, done }) => (
               <li key={task.id}>
                 <button
                   type="button"
@@ -141,7 +110,7 @@ export function SearchDialog({
                       {task.seriesId ? 'Repeating' : `Due ${day(task.dueDate)}`}
                     </span>
                   </span>
-                  {task.completedAt && <CheckCircle2 className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
+                  {done && <CheckCircle2 className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
                 </button>
               </li>
             ))}
@@ -154,7 +123,9 @@ export function SearchDialog({
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-slate-900 dark:text-white">{series.title}</span>
-                    <span className="block text-xs text-slate-500 dark:text-slate-400">Repeating, starts {day(series.startDate)}</span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      {series.startDate > today ? `Repeating, starts ${day(series.startDate)}` : 'Repeating'}
+                    </span>
                   </span>
                 </button>
               </li>
