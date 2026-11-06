@@ -14,8 +14,10 @@ export interface PlacedItem<T> extends TimelineItem<T> {
 /**
  * Lays out a day's items in columns, the way calendar apps do: items that don't overlap anything
  * take the full width, and each group of overlapping items shares the width evenly.
+ * `minMinutes` is how long the shortest item looks once drawn, so short items one after another
+ * (two 15 minute blocks) go side by side instead of covering each other.
  */
-export function placeItems<T>(items: readonly TimelineItem<T>[]): PlacedItem<T>[] {
+export function placeItems<T>(items: readonly TimelineItem<T>[], minMinutes = 0): PlacedItem<T>[] {
   const sorted = [...items].filter((i) => i.end > i.start).sort((a, b) => a.start - b.start || b.end - a.end);
   const placed: PlacedItem<T>[] = [];
   let group: PlacedItem<T>[] = [];
@@ -29,14 +31,15 @@ export function placeItems<T>(items: readonly TimelineItem<T>[]): PlacedItem<T>[
   };
 
   for (const item of sorted) {
+    const drawnEnd = Math.max(item.end, item.start + minMinutes);
     if (item.start >= groupEnd) finishGroup();
     let lane = laneEnds.findIndex((end) => end <= item.start);
     if (lane === -1) lane = laneEnds.length;
-    laneEnds[lane] = item.end;
+    laneEnds[lane] = drawnEnd;
     const p = { ...item, lane, lanes: 1 };
     group.push(p);
     placed.push(p);
-    groupEnd = Math.max(groupEnd, item.end);
+    groupEnd = Math.max(groupEnd, drawnEnd);
   }
   finishGroup();
   return placed;

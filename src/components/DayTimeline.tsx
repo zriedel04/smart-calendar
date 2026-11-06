@@ -18,6 +18,10 @@ type Entry = { kind: 'event'; event: CalendarEvent } | { kind: 'work'; block: Wo
 /** Pixels for one hour. Half an hour is tall enough for a title and its time. */
 const HOUR_HEIGHT = 48;
 const px = (minutes: Minutes) => (minutes / 60) * HOUR_HEIGHT;
+/** The shortest a block is drawn, so a 15 minute one still fits a line of text. */
+const MIN_HEIGHT = 20;
+/** How much of the day the shortest block covers, plus the 2px gap below each one. */
+const MIN_MINUTES = ((MIN_HEIGHT + 2) / HOUR_HEIGHT) * 60;
 
 /**
  * A day drawn hour by hour, like a calendar app's day view: your work hours shaded, events where
@@ -45,7 +49,7 @@ export function DayTimeline({
     ...blocks.map((block) => ({ start: block.range.start, end: block.range.end, item: { kind: 'work' as const, block } })),
   ];
   const hours = timelineHours([...working, ...items]);
-  const placed = placeItems(items);
+  const placed = placeItems(items, MIN_MINUTES);
   const hourMarks: Minutes[] = [];
   for (let m = hours.start; m <= hours.end; m += 60) hourMarks.push(m);
   const top = (m: Minutes) => px(Math.min(Math.max(m, hours.start), hours.end) - hours.start);
@@ -73,7 +77,7 @@ export function DayTimeline({
         ))}
 
         {placed.map(({ start, end, lane, lanes, item }) => {
-          const height = Math.max(20, top(end) - top(start) - 2);
+          const height = Math.max(MIN_HEIGHT, top(end) - top(start) - 2);
           const short = height < 34;
           const style = {
             top: top(start) + 1,

@@ -18,6 +18,16 @@ describe('placeItems', () => {
     expect(byItem).toEqual({ long: [0, 2], first: [1, 2], second: [1, 2], later: [0, 1] });
   });
 
+  it('puts short items one after another side by side when drawn taller than they last', () => {
+    const quarter = (start: number, item: string) => ({ start, end: start + 15, item });
+    const placed = placeItems([quarter(600, 'a'), quarter(615, 'b'), quarter(630, 'c')], 25);
+    expect(placed.map((p) => [p.item, p.lane, p.lanes])).toEqual([
+      ['a', 0, 2],
+      ['b', 1, 2],
+      ['c', 0, 2],
+    ]);
+  });
+
   it('leaves out items with no length', () => {
     expect(placeItems([at(9, 9, 'empty')])).toEqual([]);
   });
