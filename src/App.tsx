@@ -200,7 +200,7 @@ export default function App() {
       )}
       {dialog?.kind === 'import' && <ImportCalendarDialog today={today} onClose={close} />}
       {dialog?.kind === 'search' && (
-        <SearchDialog today={today} onClose={close} onOpenTask={editTask} onOpenEvent={editEvent} />
+        <SearchDialog today={today} onClose={close} onOpenTask={editTask} onOpenSeries={editSeries} onOpenEvent={editEvent} />
       )}
       <SyncConflictDialog />
       <UndoToast />

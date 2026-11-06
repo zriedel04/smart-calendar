@@ -64,6 +64,12 @@ describe('finer repeats and events over several days', () => {
     expect(nextDayOf(event({ repeat: 'weekly', until: '2026-11-08' }), '2026-11-04')).toBeNull();
     // A trip under way counts from the day it started.
     expect(nextDayOf(event({ date: '2026-11-02', endDate: '2026-11-05', allDay: true }), '2026-11-04')).toBe('2026-11-02');
+    // So does a repeating one, even when its repeats stopped the day it started.
+    const weeklyTrip = event({ date: '2026-11-02', endDate: '2026-11-04', allDay: true, repeat: 'weekly', until: '2026-11-02' });
+    expect(nextDayOf(weeklyTrip, '2026-11-03')).toBe('2026-11-02');
+    // A Feb 29 event more than two years off, and a repeating event that starts years from now.
+    expect(nextDayOf(event({ date: '2024-02-29', repeat: 'yearly' }), '2025-11-06')).toBe('2028-02-29');
+    expect(nextDayOf(event({ date: '2030-01-07', repeat: 'weekly' }), '2026-11-04')).toBe('2030-01-07');
   });
 
   it('runs an all-day event through its last day, and each repeat as long', () => {

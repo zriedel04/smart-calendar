@@ -628,6 +628,22 @@ describe('App', () => {
     expect(within(dialog).getByText('Nothing matches "zebra".')).toBeInTheDocument();
   });
 
+  it('finds a repeating task that has not started yet', async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    data.series = [
+      { id: 'piano', title: 'Piano practice', estimateMinutes: 30, days: [2, 4], startDate: '2027-01-12', createdAt: '2026-11-01T00:00:00.000Z' },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderApp();
+
+    await user.keyboard('/');
+    const dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'piano');
+    await user.click(within(dialog).getByRole('button', { name: /Piano practice/ }));
+    expect(screen.getByRole('dialog', { name: 'Edit repeating task' })).toBeInTheDocument();
+  });
+
   it('keeps the last date of a yearly event when it is edited', async () => {
     const data = createSampleData('2026-11-02');
     data.events = [

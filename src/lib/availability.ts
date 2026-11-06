@@ -151,16 +151,25 @@ export function eventStartsOn(event: CalendarEvent, date: ISODate): boolean {
   return diff === 0;
 }
 
-/** How far ahead to look for an event's next day. */
-const LOOK_AHEAD_DAYS = 2 * 366;
+/**
+ * How far ahead to look for an event's next day. A yearly event on Feb 29 can go 8 years
+ * between days (2096 to 2104); everything else repeats well within 2 years.
+ */
+const lookAheadDays = (event: CalendarEvent) => (event.repeat === 'yearly' ? 8 : 2) * 366;
 
-/** The next day on or after `today` the event happens, or null if it's over. */
+/**
+ * The day the event's next run starts, or null if it's over. A run under way on `today`, such
+ * as a trip, counts from the day it started, so it's still the one to show or edit.
+ */
 export function nextDayOf(event: CalendarEvent, today: ISODate): ISODate | null {
-  if (event.repeat === 'none') return runStartOn(event, today) ?? (event.date >= today ? event.date : null);
-  for (let i = 0; i < LOOK_AHEAD_DAYS; i++) {
-    const day = addDays(today, i);
+  const ongoing = runStartOn(event, today);
+  if (ongoing !== null) return ongoing;
+  if (event.repeat === 'none') return event.date > today ? event.date : null;
+  const from = event.date > today ? event.date : today;
+  for (let i = 0; i < lookAheadDays(event); i++) {
+    const day = addDays(from, i);
     if (event.until && day > event.until) return null;
-    if (runStartOn(event, day) !== null) return day;
+    if (eventStartsOn(event, day)) return day;
   }
   return null;
 }

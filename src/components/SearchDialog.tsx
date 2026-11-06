@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { nextDayOf, type CalendarEvent } from '../lib/availability';
 import { formatDate, type ISODate } from '../lib/dates';
 import { useStore } from '../state/context';
-import type { Task } from '../state/types';
+import type { Task, TaskSeries } from '../state/types';
 import { EventIcon, Modal } from './ui';
 import { eventRepeatLabel, eventTime } from './eventStyles';
 import { inputClass } from './styles';
@@ -25,11 +25,13 @@ export function SearchDialog({
   today,
   onClose,
   onOpenTask,
+  onOpenSeries,
   onOpenEvent,
 }: {
   today: ISODate;
   onClose: () => void;
   onOpenTask: (task: Task) => void;
+  onOpenSeries: (series: TaskSeries) => void;
   onOpenEvent: (event: CalendarEvent, occurrence?: ISODate) => void;
 }) {
   const { data } = useStore();
@@ -52,8 +54,13 @@ export function SearchDialog({
       .filter((t) => !t.seriesId || (!seenSeries.has(t.seriesId) && seenSeries.add(t.seriesId)))
       .sort((a, b) => Number(Boolean(a.completedAt)) - Number(Boolean(b.completedAt)) || a.dueDate.localeCompare(b.dueDate))
       .slice(0, MAX_RESULTS);
-    return { events, tasks };
-  }, [query, data.events, data.tasks, today]);
+    // A repeating task that starts later has no copies yet, so it's found by its own details.
+    const withCopies = new Set(data.tasks.flatMap((t) => (t.seriesId ? [t.seriesId] : [])));
+    const series = (data.series ?? [])
+      .filter((s) => !withCopies.has(s.id) && matches(words, s.title, s.notes))
+      .slice(0, MAX_RESULTS);
+    return { events, tasks, series };
+  }, [query, data.events, data.tasks, data.series, today]);
 
   const day = (date: ISODate) =>
     formatDate(date, { weekday: 'short', month: 'short', day: 'numeric', ...(date.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {}) });
@@ -77,7 +84,7 @@ export function SearchDialog({
         />
       </div>
 
-      {results && results.events.length === 0 && results.tasks.length === 0 && (
+      {results && results.events.length === 0 && results.tasks.length === 0 && results.series.length === 0 && (
         <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">Nothing matches "{query.trim()}".</p>
       )}
 
@@ -96,7 +103,9 @@ export function SearchDialog({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-slate-900 dark:text-white">{event.title}</span>
                     <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-                      {event.repeat !== 'none' ? `${eventRepeatLabel(event)}${next ? ` · next ${day(next)}` : ''}` : day(event.date)}
+                      {event.repeat !== 'none'
+                        ? `${eventRepeatLabel(event)}${next ? (next < today ? ' · on now' : ` · next ${day(next)}`) : ''}`
+                        : day(event.date)}
                       {' · '}
                       {eventTime(event)}
                     </span>
@@ -114,7 +123,7 @@ export function SearchDialog({
         </section>
       )}
 
-      {results && results.tasks.length > 0 && (
+      {results && (results.tasks.length > 0 || results.series.length > 0) && (
         <section className="mt-4">
           <h3 className="mb-1 px-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">Tasks</h3>
           <ul>
@@ -132,6 +141,20 @@ export function SearchDialog({
                     </span>
                   </span>
                   {task.completedAt && <CheckCircle2 className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
+                </button>
+              </li>
+            ))}
+            {results.series.map((series) => (
+              <li key={series.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenSeries(series)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-slate-900 dark:text-white">{series.title}</span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">Repeating, starts {day(series.startDate)}</span>
+                  </span>
                 </button>
               </li>
             ))}
