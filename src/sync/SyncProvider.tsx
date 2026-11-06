@@ -190,7 +190,9 @@ export function SyncProvider({
       conflict: user ? conflict : null,
       conflictPostponed,
       signIn: (email) => backend.signIn(email),
-      verifyCode: (email, code) => backend.verifyCode(email, code),
+      signInWithPassword: (email, password) => backend.signInWithPassword(email, password),
+      signUp: (email, password) => backend.signUp(email, password),
+      setPassword: (password) => backend.setPassword(password),
       signOut: async () => {
         const current = userRef.current;
         await backend.signOut();

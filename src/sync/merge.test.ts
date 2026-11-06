@@ -47,6 +47,15 @@ describe('mergeAppData', () => {
     }
   });
 
+  it('keeps one event when two devices change the same day of a repeating event', () => {
+    const standup = { id: 's', title: 'Standup', date: '2026-11-02', start: 780, end: 810, repeat: 'weekly' as const };
+    const base: AppData = { ...createEmptyData(), events: [standup] };
+    const move = (start: number) =>
+      reducer(base, { type: 'event/changeDay', id: 's', date: '2026-11-09', draft: { ...standup, date: '2026-11-09', start, end: start + 30 } });
+    const merged = mergeAppData(base, move(900), move(960));
+    expect(merged.events.filter((e) => e.date === '2026-11-09')).toEqual([expect.objectContaining({ start: 900 })]);
+  });
+
   it('lets this device win when both changed the same thing', () => {
     const base = withTasks(task('a'));
     expect(mergeAppData(base, withTasks(task('a', 'Mine')), withTasks(task('a', 'Theirs'))).tasks[0]?.title).toBe('Mine');

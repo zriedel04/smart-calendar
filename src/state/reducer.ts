@@ -260,7 +260,9 @@ function apply(state: AppData, action: Action): AppData {
       // The day's own event is yours, not the link's or the file's, so refreshes leave it alone.
       const { repeat: _repeat, rule: _rule, until: _until, skip: _skip, sourceId: _id, feedId: _feed, sourceStamp: _stamp, sourceKey: _key, ...rest } =
         action.draft;
-      return { ...state, events: [...events, { ...rest, repeat: 'none', id: createId() }] };
+      // Its id comes from the series and the day, so the same day changed on two devices merges into one event.
+      const id = `${series.id}@${action.date}`;
+      return { ...state, events: [...events.filter((e) => e.id !== id), { ...rest, repeat: 'none', id }] };
     }
     case 'event/delete': {
       const deleted = state.events.find((e) => e.id === action.id);

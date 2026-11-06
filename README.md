@@ -84,7 +84,7 @@ The sync logic ([`src/sync/engine.ts`](src/sync/engine.ts)) talks to a small sto
 - [React 19](https://react.dev) and [TypeScript](https://www.typescriptlang.org)
 - [Vite](https://vite.dev) for builds, with [vite-plugin-pwa](https://vite-pwa-org.netlify.app) for offline support and install
 - [Tailwind CSS 4](https://tailwindcss.com) for styling and [Lucide](https://lucide.dev) icons
-- [Supabase](https://supabase.com) for optional accounts (email sign-in links or codes), a Postgres table with row-level security, and Realtime updates
+- [Supabase](https://supabase.com) for optional accounts (email and password, with emailed sign-in links as a backup), a Postgres table with row-level security, and Realtime updates
 - [Vitest](https://vitest.dev) and [Testing Library](https://testing-library.com) for tests, [Oxlint](https://oxc.rs) for linting
 - GitHub Actions for CI and deployment to GitHub Pages
 
@@ -134,7 +134,7 @@ To use your own Supabase project for accounts:
 
 1. Create a project, then run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor.
 2. Under **Authentication → URL Configuration**, set the Site URL to your deployed app and add it (and `http://localhost:5173/**`) to the Redirect URLs.
-3. Under **Authentication → Emails → Magic Link**, add the code to the email, for example `<p>Or type this code in the app: {{ .Token }}</p>`. The code signs you in when the link would open in a different browser, or from an app added to a phone's home screen.
+3. Optionally, under **Authentication → Sign In / Providers → Email**, turn off **Confirm email** so new accounts don't need an email (Supabase's built-in sender only sends a few per hour).
 4. For calendar links, deploy [`supabase/functions/fetch-feed/index.ts`](supabase/functions/fetch-feed/index.ts) as an Edge Function named `fetch-feed`, with JWT verification turned off (the function checks the signed-in user itself).
 5. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set to your project's URL and publishable key.
 
