@@ -1,4 +1,4 @@
-import { daysBetween, weekdayOf, type ISODate } from './dates';
+import { addDays, daysBetween, weekdayOf, type ISODate } from './dates';
 import { normalizeRanges, subtractRanges, totalMinutes, type Minutes, type TimeRange } from './time';
 
 /** Default working hours for each weekday. Index 0 is Sunday, 6 is Saturday. */
@@ -12,6 +12,17 @@ export type EventKind = 'busy' | 'plan' | 'birthday' | 'other';
 
 export type EventRepeat = 'none' | 'weekly' | 'monthly' | 'yearly';
 
+/**
+ * Finer repeats, kept apart from `repeat` so an older copy of the app (say a phone that hasn't
+ * reloaded yet) still reads the event, as the nearest plain repeat, instead of dropping it.
+ * daily, weekdays and biweekly go with repeat 'weekly'; monthlyWeekday ("the 3rd Thursday") with 'monthly'.
+ */
+export type RepeatRule = 'daily' | 'weekdays' | 'biweekly' | 'monthlyWeekday';
+export const REPEAT_RULES: readonly RepeatRule[] = ['daily', 'weekdays', 'biweekly', 'monthlyWeekday'];
+
+/** The longest an event can run, so a typo can't make one cover years. */
+export const MAX_EVENT_DAYS = 60;
+
 /** Something on your calendar that isn't a task: a class, a shift, plans with friends, a birthday. */
 export interface CalendarEvent {
   id: string;
@@ -22,8 +33,14 @@ export interface CalendarEvent {
   start: Minutes;
   end: Minutes;
   repeat: EventRepeat;
+  /** A finer repeat than `repeat` alone; see RepeatRule. */
+  rule?: RepeatRule;
   /** The last date a repeating event can happen on, such as the end of a semester. */
   until?: ISODate;
+  /** The last day of an all-day event that runs several days, such as a trip. Each repeat runs as long. */
+  endDate?: ISODate;
+  location?: string;
+  notes?: string;
   /** Defaults to 'busy', the original kind of event (classes and shifts). */
   kind?: EventKind;
   allDay?: boolean;
@@ -64,10 +81,44 @@ export interface AvailabilityRules {
   events: readonly CalendarEvent[];
 }
 
+/** How many days after the day it starts an event still runs: 0 for a one-day event. */
+export function eventExtraDays(event: CalendarEvent): number {
+  if (!event.allDay || !event.endDate) return 0;
+  return Math.min(Math.max(daysBetween(event.date, event.endDate), 0), MAX_EVENT_DAYS - 1);
+}
+
 export function eventOccursOn(event: CalendarEvent, date: ISODate): boolean {
+  const extra = eventExtraDays(event);
+  for (let back = 0; back <= extra; back++) {
+    if (eventStartsOn(event, back === 0 ? date : addDays(date, -back))) return true;
+  }
+  return false;
+}
+
+/** The nth week of the month a day falls in, from 1; 5 means the last. */
+function weekOfMonth(date: ISODate): number {
+  return Math.ceil(Number(date.slice(8)) / 7);
+}
+
+/** Whether a run of the event starts on `date`. */
+export function eventStartsOn(event: CalendarEvent, date: ISODate): boolean {
   const diff = daysBetween(event.date, date);
   if (diff < 0) return false;
   if (event.until && date > event.until) return false;
+  const rule = event.rule && REPEAT_RULES.includes(event.rule) ? event.rule : undefined;
+  if (rule === 'daily') return true;
+  if (rule === 'weekdays') {
+    const weekday = weekdayOf(date);
+    return weekday >= 1 && weekday <= 5;
+  }
+  if (rule === 'biweekly') return diff % 14 === 0;
+  if (rule === 'monthlyWeekday') {
+    if (weekdayOf(date) !== weekdayOf(event.date)) return false;
+    const nth = weekOfMonth(event.date);
+    // A 5th weekday means the last one, so months with only four still get it.
+    if (nth >= 5) return Number(date.slice(8)) + 7 > daysInMonth(Number(date.slice(0, 4)), Number(date.slice(5, 7)));
+    return weekOfMonth(date) === nth;
+  }
   if (event.repeat === 'weekly') return diff % 7 === 0;
   if (event.repeat === 'monthly') {
     const day = Number(event.date.slice(8));

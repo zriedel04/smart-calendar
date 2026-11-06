@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Star, Timer } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MapPin, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Star, Timer } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
@@ -8,7 +8,7 @@ import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange, type TimeRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { inputClass } from '../components/styles';
-import { eventTime, HOLIDAY_CHIP } from '../components/eventStyles';
+import { eventTime, HOLIDAY_CHIP, mapsUrl } from '../components/eventStyles';
 import { Button, Card, EmptyState, PriorityBadge, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
 import { useClockMinutes, useShowHolidays, useShowTimes } from '../state/preferences';
@@ -160,7 +160,18 @@ export function TodayView({
               <li key={e.id} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                 <EventIcon event={e} className="size-4 text-slate-400" />
                 <span className="tabular-nums">{eventTime(e)}</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100">{e.title}</span>
+                <span className="min-w-0 font-medium text-slate-800 dark:text-slate-100">{e.title}</span>
+                {e.location && (
+                  <a
+                    href={mapsUrl(e.location)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-auto flex min-w-0 shrink items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-300"
+                  >
+                    <MapPin className="size-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{e.location}</span>
+                  </a>
+                )}
               </li>
             ))}
           </ul>
