@@ -27,6 +27,14 @@ export function AccountCard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [settingPassword, setSettingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  // A new password typed but not saved belongs to whoever was signed in: drop it when that changes,
+  // however it happens (this card, another tab, or the session running out).
+  const [accountEmail, setAccountEmail] = useState(sync.email);
+  if (accountEmail !== sync.email) {
+    setAccountEmail(sync.email);
+    setSettingPassword(false);
+    setNewPassword('');
+  }
 
   if (!sync.available) return null;
 
