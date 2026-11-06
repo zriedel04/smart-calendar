@@ -1,16 +1,17 @@
-import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MapPin, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Timer } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MapPin, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Star, Timer } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
 import { addDays, formatDate, localToday, relativeDayPhrase } from '../lib/dates';
+import { holidaysOn } from '../lib/holidays';
 import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange, type TimeRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { inputClass } from '../components/styles';
-import { eventTime, mapsUrl } from '../components/eventStyles';
+import { eventTime, HOLIDAY_CHIP, mapsUrl } from '../components/eventStyles';
 import { Button, Card, EmptyState, PriorityBadge, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
-import { useClockMinutes, useShowTimes } from '../state/preferences';
+import { useClockMinutes, useShowHolidays, useShowTimes } from '../state/preferences';
 import { isTaskComplete, remainingMinutes, type Plan } from '../state/planner';
 import type { Task } from '../state/types';
 
@@ -35,6 +36,8 @@ export function TodayView({
 
   const working = workingHoursOn(data, today);
   const events = eventsOn(data.events, today);
+  const [showHolidays] = useShowHolidays();
+  const holidays = showHolidays ? holidaysOn(today) : [];
   const capacity = capacityOn(data, today);
   const pending = plan.dayPlan(today).items;
   const plannedLeft = pending.reduce((sum, i) => sum + i.minutes, 0);
@@ -73,6 +76,18 @@ export function TodayView({
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
               {formatDate(today, { month: 'long', day: 'numeric' })}
             </h1>
+            {holidays.length > 0 && (
+              <p className="mt-1.5 flex flex-wrap gap-1">
+                {holidays.map((h) => (
+                  <span
+                    key={h.name}
+                    className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium', HOLIDAY_CHIP)}
+                  >
+                    <Star className="size-3" aria-hidden /> {h.name}
+                  </span>
+                ))}
+              </p>
+            )}
           </div>
           <Button size="sm" onClick={() => onEditDay(today)}>
             <Clock className="size-4" /> Change today's hours
