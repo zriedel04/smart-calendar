@@ -3,6 +3,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 const SHOW_TIMES_KEY = 'smart-calendar:show-times';
 const DUE_ONLY_KEY = 'smart-calendar:month-due-only';
 const HOLIDAYS_KEY = 'smart-calendar:show-holidays';
+const TODAY_LAYOUT_KEY = 'smart-calendar:today-layout';
 
 function read(key: string): string | null {
   try {
@@ -28,6 +29,18 @@ export function useShowTimes(): [boolean, (next: boolean) => void] {
     write(SHOW_TIMES_KEY, next ? 'on' : 'off');
   };
   return [show, update];
+}
+
+export type TodayLayout = 'list' | 'hours';
+
+/** Whether Today shows a checklist or an hour-by-hour timeline. The list unless you pick Hours; kept per device. */
+export function useTodayLayout(): [TodayLayout, (next: TodayLayout) => void] {
+  const [layout, setLayout] = useState<TodayLayout>(() => (read(TODAY_LAYOUT_KEY) === 'hours' ? 'hours' : 'list'));
+  const update = (next: TodayLayout) => {
+    setLayout(next);
+    write(TODAY_LAYOUT_KEY, next);
+  };
+  return [layout, update];
 }
 
 /**

@@ -197,6 +197,42 @@ describe('App', () => {
     expect(within(todaysList()).queryByText('2:30pm – 3:30pm ·')).not.toBeInTheDocument();
   });
 
+  it('shows today hour by hour, with events and work blocks you can open, and remembers the choice', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Essay');
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '10');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    await user.click(screen.getByRole('button', { name: 'Add event' }));
+    dialog = screen.getByRole('dialog', { name: 'Add to your calendar' });
+    await user.type(within(dialog).getByLabelText('Name'), 'Class');
+    await user.selectOptions(within(dialog).getByLabelText('Repeats'), "Doesn't repeat");
+    fireEvent.change(within(dialog).getByLabelText('Starts'), { target: { value: '13:00' } });
+    fireEvent.change(within(dialog).getByLabelText('Ends'), { target: { value: '13:30' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
+
+    await user.click(screen.getByRole('radio', { name: 'Hours' }));
+    const hours = screen.getByRole('heading', { name: 'Today by the hour' }).closest('section')!;
+    // The 1pm class splits the essay into two blocks; the second says what's left for later days.
+    expect(within(hours).getByRole('button', { name: 'Essay, Work · 12pm – 1pm' })).toBeInTheDocument();
+    expect(within(hours).getByRole('button', { name: 'Essay, Work · 1:30pm – 6pm · 4h 30m left after today' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'On your calendar' })).not.toBeInTheDocument();
+
+    await user.click(within(hours).getByRole('button', { name: 'Class, 1pm – 1:30pm' }));
+    expect(screen.getByRole('dialog', { name: 'Edit event' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(within(hours).getByRole('button', { name: 'Essay, Work · 12pm – 1pm' }));
+    expect(screen.getByRole('dialog', { name: 'Edit task' })).toBeInTheDocument();
+
+    unmount();
+    renderApp();
+    expect(screen.getByRole('radio', { name: 'Hours' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: 'List' }));
+    expect(screen.getByRole('heading', { name: "Today's list" })).toBeInTheDocument();
+  });
+
   it('plans a task on the day you choose, from the form or by dragging it in the week', async () => {
     const user = userEvent.setup();
     renderApp();

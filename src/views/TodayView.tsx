@@ -1,6 +1,6 @@
 import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MapPin, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Star, Timer } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
+import { capacityOn, eventKind, eventsOn, freeHoursOn, hasOverride, workingHoursOn, type CalendarEvent } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
 import { addDays, formatDate, localToday, relativeDayPhrase } from '../lib/dates';
 import { holidaysOn } from '../lib/holidays';
@@ -8,10 +8,11 @@ import { priorityOf } from '../lib/priority';
 import { formatDuration, formatRange, type TimeRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { inputClass } from '../components/styles';
-import { eventTime, HOLIDAY_CHIP, mapsUrl } from '../components/eventStyles';
+import { EVENT_CHIP, eventTime, HOLIDAY_CHIP, mapsUrl } from '../components/eventStyles';
 import { Button, Card, EmptyState, PriorityBadge, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
-import { useClockMinutes, useShowHolidays, useShowTimes } from '../state/preferences';
+import { useClockMinutes, useShowHolidays, useShowTimes, useTodayLayout } from '../state/preferences';
+import { DayTimeline, type WorkBlock } from '../components/DayTimeline';
 import { isTaskComplete, remainingMinutes, type Plan } from '../state/planner';
 import type { Task } from '../state/types';
 
@@ -20,6 +21,7 @@ export function TodayView({
   onAddTask,
   onEditTask,
   onEditDay,
+  onEditEvent,
   onLoadSample,
   onOpenSchedule,
 }: {
@@ -27,6 +29,7 @@ export function TodayView({
   onAddTask: () => void;
   onEditTask: (task: Task) => void;
   onEditDay: (date: string) => void;
+  onEditEvent: (event: CalendarEvent) => void;
   onLoadSample: () => void;
   onOpenSchedule: () => void;
 }) {
@@ -61,18 +64,31 @@ export function TodayView({
   const [showTimes, setShowTimes] = useShowTimes();
   const clock = useClockMinutes();
   // Suggested times for what's left today, starting from now.
-  const times = new Map(
-    timeBlocks(freeHoursOn(data, today), pending, nextQuarterHour(clock)).map((t) => [t.taskId, t.ranges]),
-  );
+  const times = new Map(timeBlocks(freeHoursOn(data, today), pending, nextQuarterHour(clock)).map((t) => [t.taskId, t.ranges]));
+  const [layout, setLayout] = useTodayLayout();
+  const canShowHours = data.tasks.length > 0 || events.length > 0;
+  const hoursView = layout === 'hours' && canShowHours;
+  // The timeline's work blocks; the last block of a task says how much it still needs after today.
+  const blocks: WorkBlock[] = [];
+  const unplaced: { task: Task; minutes: number }[] = [];
+  for (const item of pending) {
+    const task = tasksById.get(item.taskId);
+    if (!task) continue;
+    const ranges = times.get(task.id) ?? [];
+    if (ranges.length === 0) unplaced.push({ task, minutes: item.minutes });
+    const after = remainingMinutes(task, plan.logged.get(task.id) ?? 0) - item.minutes;
+    ranges.forEach((range, i) =>
+      blocks.push({ task, range, note: i === ranges.length - 1 && after > 0 ? `${formatDuration(after)} left after today` : undefined }),
+    );
+  }
+  const allDayEvents = events.filter((e) => e.allDay);
 
   return (
     <div className="space-y-4">
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">
-              {formatDate(today, { weekday: 'long' })}
-            </p>
+            <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300">{formatDate(today, { weekday: 'long' })}</p>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
               {formatDate(today, { month: 'long', day: 'numeric' })}
             </h1>
@@ -128,8 +144,7 @@ export function TodayView({
       {atRisk.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
           <p className="flex items-center gap-2 font-medium">
-            <AlertTriangle className="size-4" /> {atRisk.length === 1 ? 'One task is' : `${atRisk.length} tasks are`}{' '}
-            at risk
+            <AlertTriangle className="size-4" /> {atRisk.length === 1 ? 'One task is' : `${atRisk.length} tasks are`} at risk
           </p>
           <ul className="mt-2 space-y-1">
             {atRisk.slice(0, 4).map((task) => {
@@ -146,13 +161,11 @@ export function TodayView({
               );
             })}
           </ul>
-          <p className="mt-2 text-amber-800/80 dark:text-amber-100/70">
-            Add work hours, push the due date, or lower the estimate.
-          </p>
+          <p className="mt-2 text-amber-800/80 dark:text-amber-100/70">Add work hours, push the due date, or lower the estimate.</p>
         </div>
       )}
 
-      {events.length > 0 && (
+      {events.length > 0 && !hoursView && (
         <Card>
           <h2 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">On your calendar</h2>
           <ul className="space-y-1.5">
@@ -179,22 +192,64 @@ export function TodayView({
       )}
 
       <Card className="p-2 sm:p-3">
-        <div className="flex items-center justify-between px-2 pt-1 pb-2">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Today's list</h2>
-          {pending.length > 0 && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showTimes}
-              onClick={() => setShowTimes(!showTimes)}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-            >
-              <Clock className="size-3.5" /> Suggested times {showTimes ? 'on' : 'off'}
-            </button>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-1 pb-2">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">{hoursView ? 'Today by the hour' : "Today's list"}</h2>
+          <div className="ml-auto flex items-center gap-3">
+            {pending.length > 0 && !hoursView && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showTimes}
+                onClick={() => setShowTimes(!showTimes)}
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                <Clock className="size-3.5" /> Suggested times {showTimes ? 'on' : 'off'}
+              </button>
+            )}
+            {canShowHours && (
+              <div
+                role="radiogroup"
+                aria-label="How to show today"
+                className="grid grid-cols-2 gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800"
+              >
+                {(['list', 'hours'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={layout === option}
+                    onClick={() => setLayout(option)}
+                    className={cx(
+                      'rounded-md px-2.5 py-1 text-xs font-medium',
+                      layout === option
+                        ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-white'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
+                    )}
+                  >
+                    {option === 'list' ? 'List' : 'Hours'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {data.tasks.length === 0 ? (
+        {hoursView ? (
+          <HoursBody
+            allDay={allDayEvents}
+            events={events.filter((e) => !e.allDay)}
+            working={working}
+            blocks={blocks}
+            now={clock}
+            unplaced={unplaced}
+            done={done.flatMap(({ taskId, minutes }) => {
+              const task = tasksById.get(taskId);
+              return task ? [{ task, minutes }] : [];
+            })}
+            onEditEvent={onEditEvent}
+            onEditTask={onEditTask}
+          />
+        ) : data.tasks.length === 0 ? (
           <EmptyState icon={<Sparkles className="size-6" />} title="Let's set up your calendar">
             <p className="font-medium text-slate-700 dark:text-slate-200">1. When do you usually work?</p>
             <HourPresets onOpenSchedule={onOpenSchedule} />
@@ -232,7 +287,10 @@ export function TodayView({
                   meta={
                     <>
                       {data.timer?.taskId === task.id && (
-                        <Timer className="mr-1 inline size-3.5 align-[-2px] text-indigo-600 dark:text-indigo-300" aria-label="Timer running" />
+                        <Timer
+                          className="mr-1 inline size-3.5 align-[-2px] text-indigo-600 dark:text-indigo-300"
+                          aria-label="Timer running"
+                        />
                       )}
                       {showTimes && <SuggestedTime ranges={times.get(task.id)} />}
                       {task.seriesId && <Repeat className="mr-1 inline size-3.5 align-[-2px]" aria-label="Repeats" />}
@@ -270,9 +328,7 @@ export function TodayView({
                       onPush={() => {
                         // A repeating task's copy belongs to its day, so pushing it skips the day.
                         dispatch(
-                          task.seriesId
-                            ? { type: 'task/skip', id: task.id }
-                            : { type: 'task/push', id: task.id, until: addDays(today, 1) },
+                          task.seriesId ? { type: 'task/skip', id: task.id } : { type: 'task/push', id: task.id, until: addDays(today, 1) },
                         );
                         setOpenRow(null);
                       }}
@@ -330,6 +386,90 @@ export function TodayView({
           </p>
         )}
       </Card>
+    </div>
+  );
+}
+
+function HoursBody({
+  allDay,
+  events,
+  working,
+  blocks,
+  now,
+  unplaced,
+  done,
+  onEditEvent,
+  onEditTask,
+}: {
+  allDay: CalendarEvent[];
+  events: CalendarEvent[];
+  working: TimeRange[];
+  blocks: WorkBlock[];
+  now: number;
+  unplaced: { task: Task; minutes: number }[];
+  done: { task: Task; minutes: number }[];
+  onEditEvent: (event: CalendarEvent) => void;
+  onEditTask: (task: Task) => void;
+}) {
+  const chip = 'inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium';
+  return (
+    <div className="space-y-3 px-1 pb-1">
+      {allDay.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5 px-1" aria-label="All day">
+          {allDay.map((e) => (
+            <li key={e.id} className="min-w-0">
+              <button type="button" onClick={() => onEditEvent(e)} className={cx(chip, EVENT_CHIP[eventKind(e)])}>
+                <EventIcon event={e} className="size-3.5 shrink-0" />
+                <span className="font-semibold">All day</span>
+                <span className="truncate">{e.title}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <DayTimeline events={events} working={working} blocks={blocks} now={now} onOpenEvent={onEditEvent} onOpenTask={onEditTask} />
+      {unplaced.length > 0 && <TaskChips label="Doesn't fit in what's left of today" items={unplaced} onOpen={onEditTask} chip={chip} />}
+      {done.length > 0 && <TaskChips label="Done today" items={done} onOpen={onEditTask} chip={chip} done />}
+    </div>
+  );
+}
+
+function TaskChips({
+  label,
+  items,
+  onOpen,
+  chip,
+  done = false,
+}: {
+  label: string;
+  items: { task: Task; minutes: number }[];
+  onOpen: (task: Task) => void;
+  chip: string;
+  done?: boolean;
+}) {
+  return (
+    <div className="px-1">
+      <p className="mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {items.map(({ task, minutes }) => (
+          <li key={task.id} className="min-w-0">
+            <button
+              type="button"
+              onClick={() => onOpen(task)}
+              className={cx(
+                chip,
+                done
+                  ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200'
+                  : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+              )}
+            >
+              {done && <Check className="size-3.5 shrink-0" aria-hidden />}
+              <span className="truncate">{task.title}</span>
+              <span className="shrink-0 opacity-70">{formatDuration(minutes)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
