@@ -1,9 +1,10 @@
-import { CalendarCheck, CalendarPlus, CalendarDays, CalendarRange, Clock, ListTodo, Plus, Sun } from 'lucide-react';
+import { CalendarCheck, CalendarPlus, CalendarDays, CalendarRange, Clock, ListTodo, Plus, Search, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { BulkTaskForm } from './components/BulkTaskForm';
 import { DayHoursDialog } from './components/DayHoursDialog';
 import { EventForm } from './components/EventForm';
 import { ImportCalendarDialog } from './components/ImportCalendarDialog';
+import { SearchDialog } from './components/SearchDialog';
 import { TaskForm } from './components/TaskForm';
 import { SyncConflictDialog } from './components/SyncConflictDialog';
 import { TimerBar } from './components/TimerBar';
@@ -39,6 +40,7 @@ type Dialog =
   | { kind: 'day'; date?: ISODate }
   | { kind: 'event'; event?: CalendarEvent; date?: ISODate; occurrence?: ISODate }
   | { kind: 'import' }
+  | { kind: 'search' }
   | null;
 
 function tabFromHash(): Tab {
@@ -78,6 +80,19 @@ export default function App() {
   const addMany = () => setDialog({ kind: 'bulk' });
   const editTask = (task: Task) => setDialog({ kind: 'task', task });
   const editSeries = (series: TaskSeries) => setDialog({ kind: 'task', series });
+
+  // "/" opens search, as on many sites, unless you're typing somewhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      setDialog((current) => current ?? { kind: 'search' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const editDay = (date?: ISODate) => setDialog({ kind: 'day', date });
   const editEvent = (event?: CalendarEvent, occurrence?: ISODate) => setDialog({ kind: 'event', event, occurrence });
   const addEventOn = (date: ISODate) => setDialog({ kind: 'event', date });
@@ -96,9 +111,13 @@ export default function App() {
             <span className="flex size-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
               <CalendarCheck className="size-5" />
             </span>
-            <span className="font-semibold tracking-tight">Smart Calendar</span>
+            {/* On phones the name makes room for the buttons; the logo stays. */}
+            <span className="font-semibold tracking-tight whitespace-nowrap max-[409px]:sr-only">Smart Calendar</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: 'search' })} aria-label="Search" title="Search (/)">
+              <Search className="size-4" />
+            </Button>
             <Button
               size="sm"
               onClick={() => (tab === 'month' && monthDay ? addEventOn(monthDay) : editEvent())}
@@ -181,6 +200,9 @@ export default function App() {
         <EventForm event={dialog.event} defaultDate={dialog.date} occurrence={dialog.occurrence} today={today} onClose={close} />
       )}
       {dialog?.kind === 'import' && <ImportCalendarDialog today={today} onClose={close} />}
+      {dialog?.kind === 'search' && (
+        <SearchDialog today={today} onClose={close} onOpenTask={editTask} onOpenSeries={editSeries} onOpenEvent={editEvent} />
+      )}
       <SyncConflictDialog />
       <UndoToast />
     </div>

@@ -640,6 +640,89 @@ describe('App', () => {
     expect(saved).toContainEqual(expect.objectContaining({ title: 'Team standup', date: '2026-11-09', repeat: 'none', start: 15 * 60 }));
   });
 
+  it('finds tasks and events by name, place or notes', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Try it with sample tasks' }));
+
+    await user.keyboard('/');
+    let dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'standup');
+    // Today is Monday, Nov 2 and the standup is at 1pm every Monday.
+    expect(within(dialog).getByRole('button', { name: /Team standup/ })).toHaveTextContent('Every Monday · next Mon, Nov 2');
+
+    await user.clear(within(dialog).getByLabelText('Search tasks and events'));
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'dynamic');
+    // Found by its notes.
+    await user.click(within(dialog).getByRole('button', { name: /Algorithms problem set 6/ }));
+    expect(screen.getByRole('dialog', { name: 'Edit task' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'zebra');
+    expect(within(dialog).getByText('Nothing matches "zebra".')).toBeInTheDocument();
+  });
+
+  it("shows a repeating task's next open day in search, not a finished one", async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    const copy = { title: 'Piano practice', estimateMinutes: 30, seriesId: 'piano', createdAt: '2026-10-01T00:00:00.000Z' };
+    data.series = [{ id: 'piano', title: 'Piano practice', estimateMinutes: 30, days: [1, 3], startDate: '2026-10-26', createdAt: copy.createdAt }];
+    // One day ticked off, one finished by logging all its time, and the next one still open.
+    data.tasks.push(
+      { ...copy, id: 'piano-ticked', dueDate: '2026-10-26', completedAt: '2026-10-26T20:00:00.000Z' },
+      { ...copy, id: 'piano-logged', dueDate: '2026-10-28' },
+      { ...copy, id: 'piano-next', dueDate: '2026-11-04' },
+    );
+    data.logs.push({ id: 'log-piano', taskId: 'piano-logged', date: '2026-10-28', minutes: 30 });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderApp();
+
+    await user.keyboard('/');
+    const dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'piano');
+    const result = within(dialog).getByRole('button', { name: /Piano practice/ });
+    expect(within(result).queryByLabelText('Done')).not.toBeInTheDocument();
+    expect(result).toHaveTextContent('Repeating');
+    await user.click(result);
+    expect(screen.getByRole('dialog', { name: 'Edit repeating task' })).toBeInTheDocument();
+  });
+
+  it('finds a repeating task by its new name when only finished days are kept', async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    data.series = [{ id: 'piano', title: 'Guitar practice', estimateMinutes: 30, days: [2], startDate: '2027-01-12', createdAt: '2026-10-01T00:00:00.000Z' }];
+    data.tasks.push({
+      id: 'piano-old', title: 'Piano practice', estimateMinutes: 30, seriesId: 'piano', dueDate: '2026-10-27',
+      completedAt: '2026-10-27T20:00:00.000Z', createdAt: '2026-10-01T00:00:00.000Z',
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderApp();
+
+    await user.keyboard('/');
+    const dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'guitar');
+    await user.click(within(dialog).getByRole('button', { name: /Guitar practice/ }));
+    expect(screen.getByRole('dialog', { name: 'Edit repeating task' })).toBeInTheDocument();
+  });
+
+  it('finds a repeating task that has not started yet', async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    data.series = [
+      { id: 'piano', title: 'Piano practice', estimateMinutes: 30, days: [2, 4], startDate: '2027-01-12', createdAt: '2026-11-01T00:00:00.000Z' },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderApp();
+
+    await user.keyboard('/');
+    const dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'piano');
+    await user.click(within(dialog).getByRole('button', { name: /Piano practice/ }));
+    expect(screen.getByRole('dialog', { name: 'Edit repeating task' })).toBeInTheDocument();
+  });
+
   it('keeps the last date of a yearly event when it is edited', async () => {
     const data = createSampleData('2026-11-02');
     data.events = [
