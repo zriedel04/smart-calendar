@@ -56,6 +56,25 @@ describe('mergeAppData', () => {
     expect(merged.events.filter((e) => e.date === '2026-11-09')).toEqual([expect.objectContaining({ start: 900 })]);
   });
 
+  it('lets this device win when it cancelled a day the other device changed', () => {
+    const standup = { id: 's', title: 'Standup', date: '2026-11-02', start: 780, end: 810, repeat: 'weekly' as const };
+    const base: AppData = { ...createEmptyData(), events: [standup] };
+    const cancelled = reducer(base, { type: 'event/skipDay', id: 's', date: '2026-11-09' });
+    const moved = reducer(base, { type: 'event/changeDay', id: 's', date: '2026-11-09', draft: { ...standup, date: '2026-11-09', start: 900, end: 930 } });
+    expect(mergeAppData(base, cancelled, moved).events.map((e) => e.id)).toEqual(['s']);
+    expect(mergeAppData(base, moved, cancelled).events.map((e) => e.id)).toEqual(['s', 's@2026-11-09']);
+  });
+
+  it("doesn't add a cancelled day to an event the other device made one-time", () => {
+    const standup = { id: 's', title: 'Standup', date: '2026-11-02', start: 780, end: 810, repeat: 'weekly' as const };
+    const base: AppData = { ...createEmptyData(), events: [standup] };
+    const once = reducer(base, { type: 'event/update', id: 's', draft: { ...standup, repeat: 'none' } });
+    const cancelled = reducer(base, { type: 'event/skipDay', id: 's', date: '2026-11-02' });
+    for (const merged of [mergeAppData(base, once, cancelled), mergeAppData(base, cancelled, once)]) {
+      expect(merged.events.find((e) => e.id === 's')?.skip).toBeUndefined();
+    }
+  });
+
   it('lets this device win when both changed the same thing', () => {
     const base = withTasks(task('a'));
     expect(mergeAppData(base, withTasks(task('a', 'Mine')), withTasks(task('a', 'Theirs'))).tasks[0]?.title).toBe('Mine');
