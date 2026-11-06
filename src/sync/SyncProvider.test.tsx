@@ -193,6 +193,21 @@ describe('Sync across devices', () => {
     expect(screen.getByLabelText('Password')).toHaveValue('');
   });
 
+  it('drops a new password that was typed but not saved when signing out', async () => {
+    const user = userEvent.setup();
+    const fake = fakeBackend(memoryStore(), ME);
+    renderWithSync(fake.backend);
+
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.click(await screen.findByRole('button', { name: 'Set a password' }));
+    await user.type(screen.getByLabelText('New password'), 'not-saved');
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    fake.finishSignIn({ id: 'user-other', email: 'other@example.com' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Set a password' })).toBeInTheDocument());
+    expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
+  });
+
   it("doesn't upload this tab's older calendar when another tab saved a newer checkpoint first", async () => {
     const user = userEvent.setup();
     const cloud = memoryStore();
