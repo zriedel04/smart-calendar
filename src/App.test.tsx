@@ -628,6 +628,25 @@ describe('App', () => {
     expect(within(dialog).getByText('Nothing matches "zebra".')).toBeInTheDocument();
   });
 
+  it("shows a repeating task's next open day in search, not a finished one", async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    const copy = { title: 'Piano practice', estimateMinutes: 30, seriesId: 'piano', createdAt: '2026-10-01T00:00:00.000Z' };
+    data.series = [{ id: 'piano', title: 'Piano practice', estimateMinutes: 30, days: [1, 3], startDate: '2026-10-26', createdAt: copy.createdAt }];
+    data.tasks.push(
+      { ...copy, id: 'piano-old', dueDate: '2026-10-28', completedAt: '2026-10-28T20:00:00.000Z' },
+      { ...copy, id: 'piano-next', dueDate: '2026-11-04' },
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderApp();
+
+    await user.keyboard('/');
+    const dialog = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(dialog).getByLabelText('Search tasks and events'), 'piano');
+    const result = within(dialog).getByRole('button', { name: /Piano practice/ });
+    expect(within(result).queryByLabelText('Done')).not.toBeInTheDocument();
+  });
+
   it('finds a repeating task that has not started yet', async () => {
     const user = userEvent.setup();
     const data = createSampleData('2026-11-02');

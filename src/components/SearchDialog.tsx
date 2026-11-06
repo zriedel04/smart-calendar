@@ -49,10 +49,11 @@ export function SearchDialog({
       .slice(0, MAX_RESULTS);
     // One entry per repeating task rather than one for each of its days.
     const seenSeries = new Set<string>();
+    // Sorted before dropping repeats, so a repeating task shows its next open day, not an old finished one.
     const tasks = data.tasks
       .filter((t) => matches(words, t.title, t.notes))
-      .filter((t) => !t.seriesId || (!seenSeries.has(t.seriesId) && seenSeries.add(t.seriesId)))
       .sort((a, b) => Number(Boolean(a.completedAt)) - Number(Boolean(b.completedAt)) || a.dueDate.localeCompare(b.dueDate))
+      .filter((t) => !t.seriesId || (!seenSeries.has(t.seriesId) && seenSeries.add(t.seriesId)))
       .slice(0, MAX_RESULTS);
     // A repeating task that starts later has no copies yet, so it's found by its own details.
     const withCopies = new Set(data.tasks.flatMap((t) => (t.seriesId ? [t.seriesId] : [])));
