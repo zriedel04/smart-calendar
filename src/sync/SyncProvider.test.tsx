@@ -17,6 +17,8 @@ function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser |
   const remoteListeners = new Set<(version: number) => void>();
   const sent: string[] = [];
   const passwords = new Map<string, string>();
+  // With Confirm email off in Supabase, signing up signs in straight away.
+  const options = { instantSignUp: false };
   const backend: SyncBackend = {
     currentUser: async () => user,
     onUserChange: (cb) => {
@@ -36,7 +38,10 @@ function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser |
     signUp: async (email, password) => {
       if (passwords.has(email)) return 'That email already has an account.';
       passwords.set(email, password);
-      return 'confirm';
+      if (!options.instantSignUp) return 'confirm';
+      user = { id: `user-${email}`, email };
+      userListeners.forEach((cb) => cb(user));
+      return null;
     },
     setPassword: async (password) => {
       if (user?.email) passwords.set(user.email, password);
@@ -56,6 +61,7 @@ function fakeBackend(cloud: ReturnType<typeof memoryStore>, signedIn: SyncUser |
   return {
     backend,
     sent,
+    options,
     finishSignIn(u: SyncUser) {
       user = u;
       act(() => userListeners.forEach((cb) => cb(u)));
@@ -168,6 +174,23 @@ describe('Sync across devices', () => {
     await user.type(screen.getByLabelText('Password'), 'second-pass');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(screen.getByText(/^Synced/)).toBeInTheDocument());
+  });
+
+  it('clears the password after an account is made and signed in straight away', async () => {
+    const user = userEvent.setup();
+    const fake = fakeBackend(memoryStore());
+    fake.options.instantSignUp = true;
+    renderWithSync(fake.backend);
+
+    await user.click(screen.getByRole('button', { name: 'Schedule' }));
+    await user.type(screen.getByLabelText('Email'), 'zach@example.com');
+    await user.type(screen.getByLabelText('Password'), 'first-pass');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(screen.getByText(/^Synced/)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(screen.getByLabelText('Email')).toHaveValue('zach@example.com');
+    expect(screen.getByLabelText('Password')).toHaveValue('');
   });
 
   it("doesn't upload this tab's older calendar when another tab saved a newer checkpoint first", async () => {

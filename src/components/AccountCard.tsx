@@ -61,6 +61,8 @@ export function AccountCard() {
         setNotice(`Check ${address} to confirm your account (the link works in any browser), then sign in here with your password.`);
         return null;
       }
+      // Signed in straight away (Confirm email is off): don't leave the password in the form.
+      if (result === null) setPassword('');
       return result;
     }, true);
 
