@@ -13,6 +13,8 @@ import { Button, Card, CardHeader, EventIcon, Modal } from '../components/ui';
 import { useSync } from '../sync/context';
 import { useStore } from '../state/context';
 import { parseAppData } from '../state/storage';
+import { useShowHolidays } from '../state/preferences';
+import { holidaysInYear } from '../lib/holidays';
 
 export function ScheduleView({
   today,
@@ -181,6 +183,7 @@ export function ScheduleView({
         )}
       </Card>
 
+      <HolidaysCard today={today} />
       <AccountCard />
       <CalendarLinksCard />
 
@@ -216,6 +219,49 @@ export function ScheduleView({
 
       <DangerZone />
     </div>
+  );
+}
+
+/** The switch for showing US holidays, with the next few coming up. */
+function HolidaysCard({ today }: { today: ISODate }) {
+  const [show, setShow] = useShowHolidays();
+  const year = Number(today.slice(0, 4));
+  const upcoming = [...holidaysInYear(year), ...holidaysInYear(year + 1)].filter((h) => h.date >= today).slice(0, 3);
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">US holidays</h2>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+            Shown on your calendar. They don’t change your work hours; to take one off, change that day’s hours.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={show}
+          aria-label="Show US holidays"
+          onClick={() => setShow(!show)}
+          className={cx(
+            'relative mt-0.5 inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors',
+            show ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700',
+          )}
+        >
+          <span
+            className={cx(
+              'inline-block size-5 rounded-full bg-white shadow transition-transform',
+              show ? 'translate-x-6' : 'translate-x-1',
+            )}
+          />
+        </button>
+      </div>
+      {show && upcoming.length > 0 && (
+        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+          Coming up:{' '}
+          {upcoming.map((h) => `${h.name} (${formatDate(h.date, { month: 'short', day: 'numeric' })})`).join(', ')}
+        </p>
+      )}
+    </Card>
   );
 }
 

@@ -1,16 +1,17 @@
-import { Check, ChevronLeft, ChevronRight, Pencil, Pin } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pencil, Pin, Star } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { capacityOn, eventsOn, freeHoursOn, hasOverride, workingHoursOn } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
+import { holidaysOn } from '../lib/holidays';
 import { priorityOf } from '../lib/priority';
 import { formatClock, formatDuration, formatRange } from '../lib/time';
 import { cx } from '../components/cx';
 import { PRIORITY_DOT } from '../components/styles';
-import { eventTime } from '../components/eventStyles';
+import { eventTime, HOLIDAY_CHIP } from '../components/eventStyles';
 import { Button, ProgressBar, EventIcon } from '../components/ui';
 import { useStore } from '../state/context';
-import { useClockMinutes, useShowTimes } from '../state/preferences';
+import { useClockMinutes, useShowHolidays, useShowTimes } from '../state/preferences';
 import type { Plan } from '../state/planner';
 import type { Task } from '../state/types';
 
@@ -29,6 +30,7 @@ export function WeekView({
   const [weekStart, setWeekStart] = useState(thisWeek);
   const tasksById = useMemo(() => new Map(data.tasks.map((t) => [t.id, t])), [data.tasks]);
   const [showTimes] = useShowTimes();
+  const [showHolidays] = useShowHolidays();
   const clock = useClockMinutes();
   const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   // Dragging a task onto a day plans it on that day.
@@ -80,6 +82,7 @@ export function WeekView({
           const working = workingHoursOn(data, date);
           const capacity = capacityOn(data, date);
           const events = eventsOn(data.events, date);
+          const holidays = showHolidays ? holidaysOn(date) : [];
           const items = isPast ? [] : plan.dayPlan(date).items;
 
           const doneByTask = new Map<string, number>();
@@ -175,6 +178,20 @@ export function WeekView({
                       </button>
                     )}
                   </div>
+
+                  {holidays.length > 0 && (
+                    <ul className="flex flex-wrap gap-1">
+                      {holidays.map((h) => (
+                        <li
+                          key={h.name}
+                          className={cx('flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', HOLIDAY_CHIP)}
+                        >
+                          <Star className="size-3 shrink-0" aria-hidden />
+                          <span className="truncate">{h.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
                   {events.length > 0 && (
                     <ul className="space-y-1">

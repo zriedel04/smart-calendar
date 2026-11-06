@@ -25,6 +25,11 @@ export const EVENT_DOT: Record<EventKind, string> = {
   other: 'bg-violet-500',
 };
 
+/** Holidays get their own color so they stand apart from your own events. */
+export const HOLIDAY_CHIP = 'bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200';
+/** The small star marking a holiday on the phone month grid. */
+export const HOLIDAY_STAR = 'text-amber-500';
+
 export function eventIcon(event: CalendarEvent): LucideIcon {
   return EVENT_KINDS.find((k) => k.kind === eventKind(event))?.icon ?? CalendarDays;
 }
