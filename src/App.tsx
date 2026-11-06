@@ -143,6 +143,7 @@ export default function App() {
             onAddTask={addTask}
             onEditTask={editTask}
             onEditDay={editDay}
+            onEditEvent={editEvent}
             onLoadSample={loadSample}
             onOpenSchedule={() => go('schedule')}
           />
