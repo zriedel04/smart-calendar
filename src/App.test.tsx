@@ -233,6 +233,37 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: "Today's list" })).toBeInTheDocument();
   });
 
+  it('moves a work block to the time you pick on the day timeline, and back', async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    data.tasks = [
+      { id: 'essay', title: 'Essay', dueDate: '2026-11-02', estimateMinutes: 60, createdAt: '2026-11-01T00:00:00.000Z' },
+      { id: 'lab', title: 'Lab', dueDate: '2026-11-02', estimateMinutes: 60, createdAt: '2026-11-01T00:00:00.000Z' },
+    ];
+    data.series = [];
+    data.events = [];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderApp();
+    await user.click(screen.getByRole('radio', { name: 'Hours' }));
+    const hours = screen.getByRole('heading', { name: 'Today by the hour' }).closest('section')!;
+    expect(within(hours).getByRole('button', { name: 'Essay, Work · 12pm – 1pm' })).toBeInTheDocument();
+
+    // Arrow keys on the handle move it 15 minutes at a time; the other task fits around it.
+    within(hours).getByRole('button', { name: 'Move "Essay", starts 12pm' }).focus();
+    await user.keyboard('{ArrowDown}');
+    expect(within(hours).getByRole('button', { name: 'Move "Essay", starts 12:15pm' })).toBeInTheDocument();
+    for (let i = 0; i < 7; i++) {
+      within(hours).getByRole('button', { name: /^Move "Essay"/ }).focus();
+      await user.keyboard('{ArrowDown}');
+    }
+    expect(within(hours).getByRole('button', { name: 'Essay, Work · 2pm – 3pm' })).toBeInTheDocument();
+    expect(within(hours).getByRole('button', { name: 'Lab, Work · 12pm – 1pm' })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks[0].startAt).toEqual({ date: '2026-11-02', start: 14 * 60 });
+
+    await user.click(within(hours).getByRole('button', { name: 'Let the app pick a time for "Essay"' }));
+    expect(within(hours).getByRole('button', { name: 'Essay, Work · 12pm – 1pm' })).toBeInTheDocument();
+  });
+
   it('plans a task on the day you choose, from the form or by dragging it in the week', async () => {
     const user = userEvent.setup();
     renderApp();

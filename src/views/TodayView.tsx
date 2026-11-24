@@ -1,7 +1,7 @@
 import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MapPin, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Star, Timer } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventKind, eventsOn, freeHoursOn, hasOverride, workingHoursOn, type CalendarEvent } from '../lib/availability';
-import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
+import { nextQuarterHour, timeBlocksWithPins } from '../lib/timeBlocks';
 import { addDays, formatDate, localToday, relativeDayPhrase } from '../lib/dates';
 import { holidaysOn } from '../lib/holidays';
 import { priorityOf } from '../lib/priority';
@@ -63,8 +63,16 @@ export function TodayView({
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [showTimes, setShowTimes] = useShowTimes();
   const clock = useClockMinutes();
-  // Suggested times for what's left today, starting from now.
-  const times = new Map(timeBlocks(freeHoursOn(data, today), pending, nextQuarterHour(clock)).map((t) => [t.taskId, t.ranges]));
+  // Suggested times for what's left today, starting from now, around any you picked yourself.
+  const pins = new Map(
+    pending.flatMap((item) => {
+      const startAt = tasksById.get(item.taskId)?.startAt;
+      return startAt?.date === today ? [[item.taskId, startAt.start] as const] : [];
+    }),
+  );
+  const times = new Map(
+    timeBlocksWithPins(freeHoursOn(data, today), pending, pins, nextQuarterHour(clock)).map((t) => [t.taskId, t.ranges]),
+  );
   const [layout, setLayout] = useTodayLayout();
   const canShowHours = data.tasks.length > 0 || events.length > 0;
   const hoursView = layout === 'hours' && canShowHours;
@@ -78,7 +86,12 @@ export function TodayView({
     if (ranges.length === 0) unplaced.push({ task, minutes: item.minutes });
     const after = remainingMinutes(task, plan.logged.get(task.id) ?? 0) - item.minutes;
     ranges.forEach((range, i) =>
-      blocks.push({ task, range, note: i === ranges.length - 1 && after > 0 ? `${formatDuration(after)} left after today` : undefined }),
+      blocks.push({
+        task,
+        range,
+        pinned: pins.has(task.id),
+        note: i === ranges.length - 1 && after > 0 ? `${formatDuration(after)} left after today` : undefined,
+      }),
     );
   }
   const allDayEvents = events.filter((e) => e.allDay);
@@ -248,6 +261,8 @@ export function TodayView({
             })}
             onEditEvent={onEditEvent}
             onEditTask={onEditTask}
+            onMoveTask={(task, start) => dispatch({ type: 'task/startAt', id: task.id, date: today, start })}
+            onUnpinTask={(task) => dispatch({ type: 'task/startAt', id: task.id, date: today, start: null })}
           />
         ) : data.tasks.length === 0 ? (
           <EmptyState icon={<Sparkles className="size-6" />} title="Let's set up your calendar">
@@ -400,6 +415,8 @@ function HoursBody({
   done,
   onEditEvent,
   onEditTask,
+  onMoveTask,
+  onUnpinTask,
 }: {
   allDay: CalendarEvent[];
   events: CalendarEvent[];
@@ -410,6 +427,8 @@ function HoursBody({
   done: { task: Task; minutes: number }[];
   onEditEvent: (event: CalendarEvent) => void;
   onEditTask: (task: Task) => void;
+  onMoveTask: (task: Task, start: number) => void;
+  onUnpinTask: (task: Task) => void;
 }) {
   const chip = 'inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium';
   return (
@@ -427,7 +446,16 @@ function HoursBody({
           ))}
         </ul>
       )}
-      <DayTimeline events={events} working={working} blocks={blocks} now={now} onOpenEvent={onEditEvent} onOpenTask={onEditTask} />
+      <DayTimeline
+        events={events}
+        working={working}
+        blocks={blocks}
+        now={now}
+        onOpenEvent={onEditEvent}
+        onOpenTask={onEditTask}
+        onMoveTask={onMoveTask}
+        onUnpinTask={onUnpinTask}
+      />
       {unplaced.length > 0 && <TaskChips label="Doesn't fit in what's left of today" items={unplaced} onOpen={onEditTask} chip={chip} />}
       {done.length > 0 && <TaskChips label="Done today" items={done} onOpen={onEditTask} chip={chip} done />}
     </div>

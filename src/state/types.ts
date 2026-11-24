@@ -18,6 +18,8 @@ export interface Task {
   notBefore?: ISODate;
   /** The day you chose to work on it. Work goes on that day first instead of in due-date order. */
   planDate?: ISODate;
+  /** When you chose to start on it, by moving it on the day timeline. Only used on that date. */
+  startAt?: { date: ISODate; start: Minutes };
   /** The repeating task this is one day's copy of. */
   seriesId?: string;
   /** The calendar link this came from, so later refreshes keep it up to date. */
