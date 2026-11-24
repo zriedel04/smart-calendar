@@ -103,6 +103,18 @@ describe('App', () => {
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks[0]).toMatchObject({ droppedAt: expect.any(String) });
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks[0]).not.toHaveProperty('completedAt');
 
+    // Search and the month calendar show it as dropped, not done.
+    await user.keyboard('/');
+    const search = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(search).getByLabelText('Search tasks and events'), 'quiz');
+    expect(within(search).getByLabelText('Dropped')).toBeInTheDocument();
+    expect(within(search).queryByLabelText('Done')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: /Friday, October 30/ }));
+    expect(screen.getByText('Dropped')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Mark "Missed quiz" not finished' })).not.toBeInTheDocument();
+
     // It waits in Tasks as dropped, and can come back.
     await user.click(screen.getByRole('button', { name: 'Tasks' }));
     expect(screen.getByText('Finished or dropped (1)')).toBeInTheDocument();
