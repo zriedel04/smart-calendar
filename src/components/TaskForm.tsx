@@ -1,6 +1,7 @@
 import { Repeat, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { addDays, isISODate, weekdayOf, WEEKDAY_NAMES, type ISODate, type Weekday } from '../lib/dates';
+import { addDays, formatDate, isISODate, weekdayOf, WEEKDAY_NAMES, type ISODate, type Weekday } from '../lib/dates';
+import { parseQuickTask, type QuickTask } from '../lib/quickAdd';
 import { formatDuration } from '../lib/time';
 import { useStore } from '../state/context';
 import { EVERY_DAY, seriesRepeatLabel, WEEKDAYS } from '../state/recurring';
@@ -51,24 +52,34 @@ export function TaskForm({
   const [until, setUntil] = useState(series?.until ?? '');
   const [planDate, setPlanDate] = useState(task?.planDate ?? '');
   const [submitted, setSubmitted] = useState(false);
+  const [keepTyped, setKeepTyped] = useState(false);
   const repeats = repeat !== 'none';
 
-  const estimateMinutes = Math.round(Number(hours) * 60);
-  const errors = {
-    title: title.trim() ? null : 'Give the task a name.',
-    dueDate: isISODate(dueDate) ? null : repeats ? 'Pick the first day.' : 'Pick a due date.',
-    hours: Number.isFinite(estimateMinutes) && estimateMinutes >= 5 ? null : 'Enter at least 5 minutes (0.1 hours).',
-    until: !repeats || !until || (isISODate(until) && until >= dueDate) ? null : 'Pick a day after the first one.',
-    planDate:
-      repeats || !planDate || (isISODate(planDate) && planDate <= dueDate) ? null : 'Pick a day by the due date.',
-  };
-  const valid = !errors.title && !errors.dueDate && !errors.hours && !errors.until && !errors.planDate;
+  // A new task's name can carry its due date and estimate, as in "Essay due Fri 3h".
+  const parsed = !source && !keepTyped ? parseQuickTask(title, today) : null;
+  const quick: QuickTask | null = parsed?.title && (parsed.dueDate || parsed.estimateMinutes) ? parsed : null;
+  function applyQuick(q: QuickTask) {
+    setTitle(q.title);
+    if (q.dueDate) setDueDate(q.dueDate);
+    if (q.estimateMinutes) setHours(String(q.estimateMinutes / 60));
+  }
 
-  function repeatDays(): Weekday[] {
+  const estimateMinutes = Math.round(Number(hours) * 60);
+  const errorsFor = (name: string, due: ISODate, minutes: number) => ({
+    title: name.trim() ? null : 'Give the task a name.',
+    dueDate: isISODate(due) ? null : repeats ? 'Pick the first day.' : 'Pick a due date.',
+    hours: Number.isFinite(minutes) && minutes >= 5 ? null : 'Enter at least 5 minutes (0.1 hours).',
+    until: !repeats || !until || (isISODate(until) && until >= due) ? null : 'Pick a day after the first one.',
+    planDate: repeats || !planDate || (isISODate(planDate) && planDate <= due) ? null : 'Pick a day by the due date.',
+  });
+  const errors = errorsFor(title, dueDate, estimateMinutes);
+  const isValid = (e: ReturnType<typeof errorsFor>) => Object.values(e).every((message) => !message);
+
+  function repeatDays(first: ISODate): Weekday[] {
     if (repeat === 'daily') return EVERY_DAY;
     if (repeat === 'weekdays') return WEEKDAYS;
     if (repeat === 'custom' && series) return series.days;
-    return isISODate(dueDate) ? [weekdayOf(dueDate)] : [];
+    return isISODate(first) ? [weekdayOf(first)] : [];
   }
   const logged = task
     ? data.logs.filter((l) => l.taskId === task.id).reduce((sum, l) => sum + l.minutes, 0)
@@ -76,24 +87,32 @@ export function TaskForm({
 
   function submit(e: FormEvent) {
     e.preventDefault();
+    // Use what the name said ("Essay due Fri 3h"), filling the fields so any problem shows on them.
+    const name = quick ? quick.title : title;
+    const due = quick?.dueDate ?? dueDate;
+    const minutes = quick?.estimateMinutes ?? estimateMinutes;
+    if (quick) applyQuick(quick);
     setSubmitted(true);
-    if (!valid) return;
+    if (isValid(errorsFor(name, due, minutes))) dispatchTask(name.trim(), due, minutes);
+  }
+
+  function dispatchTask(name: string, due: ISODate, minutes: number) {
     if (repeats) {
       const draft: SeriesDraft = {
-        title: title.trim(),
-        estimateMinutes,
+        title: name,
+        estimateMinutes: minutes,
         notes: notes.trim() || undefined,
-        days: repeatDays(),
-        startDate: dueDate,
+        days: repeatDays(due),
+        startDate: due,
         ...(until ? { until } : {}),
       };
       if (series) dispatch({ type: 'series/update', id: series.id, draft, today });
       else dispatch({ type: 'series/add', draft, today, ...(task ? { replacesTaskId: task.id } : {}) });
     } else {
       const draft = {
-        title: title.trim(),
-        dueDate,
-        estimateMinutes,
+        title: name,
+        dueDate: due,
+        estimateMinutes: minutes,
         notes: notes.trim() || undefined,
         planDate: planDate || undefined,
       };
@@ -145,7 +164,26 @@ export function TaskForm({
       }
     >
       <form id="task-form" onSubmit={submit} className="space-y-4" noValidate>
-        <Field label="What do you need to do?" hint={error(errors.title)}>
+        <Field
+          label="What do you need to do?"
+          hint={
+            error(errors.title) ??
+            (quick ? (
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-indigo-700 dark:text-indigo-300">
+                  Adds "{quick.title}"
+                  {quick.dueDate && <>, due {formatDate(quick.dueDate, { weekday: 'short', month: 'short', day: 'numeric' })}</>}
+                  {quick.estimateMinutes && <>, {formatDuration(quick.estimateMinutes)}</>}
+                </span>
+                <button type="button" onClick={() => setKeepTyped(true)} className="font-medium underline underline-offset-2">
+                  Keep as typed
+                </button>
+              </span>
+            ) : (
+              !source && 'Tip: add the due date and hours to the name, like "Essay due Fri 3h".'
+            ))
+          }
+        >
           {(id) => (
             <input
               id={id}
