@@ -38,6 +38,12 @@ describe('planFor', () => {
     expect(plan.forecasts.get('laundry')).toMatchObject({ atRisk: false, finishDate: '2026-11-08' });
   });
 
+  it('plans no time for a dropped task and never marks it at risk', () => {
+    const d = data({ tasks: [task('missed', '2026-11-01', 3, { droppedAt: '2026-11-03T08:00:00.000Z' }), task('b', '2026-11-06', 2)] });
+    expect(todayItems(d)).toEqual(['b:120']);
+    expect(planFor(d, TODAY).forecasts.get('missed')).toBeUndefined();
+  });
+
   it("keeps the rest of today's list the same after you tick something off", () => {
     const base = data({ tasks: [task('a', '2026-11-05', 2), task('b', '2026-11-06', 3), task('c', '2026-11-09', 5)] });
     expect(todayItems(base)).toEqual(['a:120', 'b:180', 'c:60']);

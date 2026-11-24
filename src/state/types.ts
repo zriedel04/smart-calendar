@@ -12,6 +12,8 @@ export interface Task {
   createdAt: string;
   /** Set when you mark a task finished yourself, even if you logged less time than estimated. */
   completedAt?: string;
+  /** Set when you drop a task you won't do, such as a missed assignment: no time is planned for it, and it isn't counted as done. */
+  droppedAt?: string;
   /** The calendar entry this was imported from, so importing the same file twice doesn't add it twice. */
   sourceId?: string;
   /** Set when you push a task off your list: no work on it is planned before this date. */
