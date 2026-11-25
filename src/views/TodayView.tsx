@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Check, Clock, Coffee, MapPin, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Star, Timer } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Ban, Check, Clock, Coffee, MapPin, MoreHorizontal, PartyPopper, Pin, Play, Plus, Repeat, SkipForward, Sparkles, Square, Star, Timer } from 'lucide-react';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { capacityOn, eventKind, eventsOn, freeHoursOn, hasOverride, workingHoursOn, type CalendarEvent } from '../lib/availability';
 import { nextQuarterHour, timeBlocks } from '../lib/timeBlocks';
@@ -157,6 +157,16 @@ export function TodayView({
                       ? `won't be done until ${relativeDayPhrase(forecast.finishDate, today)}, but it's due ${relativeDayPhrase(task.dueDate, today)}.`
                       : "can't be scheduled because there are no work hours set."}
                   </button>
+                  {!task.seriesId && task.dueDate < today && (
+                    <button
+                      type="button"
+                      onClick={() => dispatch({ type: 'task/drop', id: task.id, dropped: true })}
+                      aria-label={`Drop "${task.title}"`}
+                      className="ml-2 font-medium underline underline-offset-2"
+                    >
+                      Drop it
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -325,6 +335,14 @@ export function TodayView({
                         dispatch({ type: 'work/log', taskId: task.id, date: today, minutes });
                         setOpenRow(null);
                       }}
+                      onDrop={
+                        !task.seriesId && task.dueDate < today
+                          ? () => {
+                              dispatch({ type: 'task/drop', id: task.id, dropped: true });
+                              setOpenRow(null);
+                            }
+                          : undefined
+                      }
                       onPush={() => {
                         // A repeating task's copy belongs to its day, so pushing it skips the day.
                         dispatch(
@@ -554,6 +572,7 @@ function RowActions({
   onTimer,
   onLog,
   onPush,
+  onDrop,
 }: {
   task: Task;
   plannedMinutes: number;
@@ -561,6 +580,8 @@ function RowActions({
   onTimer: () => void;
   onLog: (minutes: number) => void;
   onPush: () => void;
+  /** For an overdue task: stop planning time for it without counting it as done. */
+  onDrop?: () => void;
 }) {
   const [hours, setHours] = useState('');
   const minutes = Math.round(Number(hours) * 60);
@@ -621,6 +642,11 @@ function RowActions({
           </>
         )}
       </Button>
+      {onDrop && (
+        <Button size="sm" variant="ghost" onClick={onDrop} title="Stop planning time for it. It isn't counted as done.">
+          <Ban className="size-4" /> Drop it
+        </Button>
+      )}
     </div>
   );
 }

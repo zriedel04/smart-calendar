@@ -12,6 +12,8 @@ export function undoLabel(action: Action, before: AppData): string | null {
       return `Logged ${formatDuration(action.minutes)} on "${task(action.taskId)}"`;
     case 'task/setComplete':
       return action.complete ? `Finished "${task(action.id)}"` : null;
+    case 'task/drop':
+      return action.dropped ? `Dropped "${task(action.id)}"` : null;
     case 'task/delete':
       return `Deleted "${task(action.id)}"`;
     case 'task/skip':

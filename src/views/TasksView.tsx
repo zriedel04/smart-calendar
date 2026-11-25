@@ -1,4 +1,4 @@
-import { CalendarPlus, Check, ListTodo, Plus, Repeat, RotateCcw } from 'lucide-react';
+import { Ban, CalendarPlus, Check, ListTodo, Plus, Repeat, RotateCcw } from 'lucide-react';
 import { relativeDayLabel, relativeDayPhrase, type ISODate } from '../lib/dates';
 import { PRIORITY_ORDER, priorityOf, type Priority } from '../lib/priority';
 import { compareTasks } from '../lib/scheduler';
@@ -185,6 +185,17 @@ export function TasksView({
                     </div>
                     {done > 0 && <ProgressBar value={done} max={task.estimateMinutes} className="mt-1.5 h-1 max-w-48" />}
                   </button>
+                  {priority === 'overdue' && !task.seriesId && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => dispatch({ type: 'task/drop', id: task.id, dropped: true })}
+                      aria-label={`Drop "${task.title}"`}
+                      title="Stop planning time for it. It isn't counted as done."
+                    >
+                      <Ban className="size-4" /> Drop
+                    </Button>
+                  )}
                 </li>
               );
             })}
@@ -195,20 +206,29 @@ export function TasksView({
       {completed.length > 0 && (
         <details className="group rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:p-3 dark:border-slate-800 dark:bg-slate-900">
           <summary className="cursor-pointer list-none px-2 py-1 text-sm font-medium text-slate-600 dark:text-slate-300">
-            Finished ({completed.length})
+            {completed.some((t) => t.droppedAt) ? 'Finished or dropped' : 'Finished'} ({completed.length})
           </summary>
           <ul className="mt-1 divide-y divide-slate-100 dark:divide-slate-800">
             {completed.map((task) => (
               <li key={task.id} className="flex items-center gap-3 px-2 py-2.5">
-                <Check className="size-4 shrink-0 text-emerald-500" />
+                {task.droppedAt ? (
+                  <Ban className="size-4 shrink-0 text-slate-400" aria-label="Dropped" />
+                ) : (
+                  <Check className="size-4 shrink-0 text-emerald-500" />
+                )}
                 <button
                   type="button"
                   onClick={() => onEditTask(task)}
                   className="min-w-0 flex-1 truncate text-left text-slate-500 line-through dark:text-slate-400"
                 >
                   {task.title}
+                  {task.droppedAt && <span className="ml-1.5 text-xs no-underline">(dropped)</span>}
                 </button>
-                {task.completedAt && (
+                {task.droppedAt ? (
+                  <Button size="sm" variant="ghost" onClick={() => dispatch({ type: 'task/drop', id: task.id, dropped: false })}>
+                    <RotateCcw className="size-3.5" /> Bring back
+                  </Button>
+                ) : task.completedAt && (
                   <Button
                     size="sm"
                     variant="ghost"

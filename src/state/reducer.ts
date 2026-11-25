@@ -17,6 +17,8 @@ export type Action =
   | { type: 'task/update'; id: string; draft: TaskDraft }
   | { type: 'task/delete'; id: string }
   | { type: 'task/setComplete'; id: string; complete: boolean }
+  /** Drops a task you won't do, so no more time is planned for it, or brings it back. */
+  | { type: 'task/drop'; id: string; dropped: boolean }
   | { type: 'task/push'; id: string; until: ISODate }
   | { type: 'task/unpush'; id: string }
   | { type: 'task/plan'; id: string; date: ISODate | null }
@@ -137,6 +139,16 @@ function apply(state: AppData, action: Action): AppData {
           if (t.id !== action.id) return t;
           if (action.complete) return { ...t, completedAt: new Date().toISOString() };
           const { completedAt: _completedAt, ...rest } = t;
+          return rest;
+        }),
+      };
+    case 'task/drop':
+      return {
+        ...(action.dropped ? withoutTimerOn(state, action.id) : state),
+        tasks: state.tasks.map((t) => {
+          if (t.id !== action.id) return t;
+          if (action.dropped) return { ...t, droppedAt: new Date().toISOString() };
+          const { droppedAt: _droppedAt, ...rest } = t;
           return rest;
         }),
       };

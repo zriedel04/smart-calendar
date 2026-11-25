@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, Flag, Plus, Star, Trash2 } from 'lucide-react';
+import { Ban, Check, ChevronLeft, ChevronRight, Flag, Plus, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { eventKind, eventsOn, runStartOn, type CalendarEvent } from '../lib/availability';
 import { addDays, formatDate, startOfWeek, type ISODate } from '../lib/dates';
@@ -393,7 +393,7 @@ export function MonthView({
               const canTick = e.kind === 'work' && selected === today;
               // A task finished by logging all its time can't be reopened from here (only by editing its estimate),
               // so its due-date entry gets a plain check mark instead of a checkbox.
-              const canToggleDue = e.kind === 'due' && (!e.done || Boolean(e.task.completedAt));
+              const canToggleDue = e.kind === 'due' && !e.task.droppedAt && (!e.done || Boolean(e.task.completedAt));
               const toggle = () => {
                 if (e.kind === 'due') {
                   dispatch({ type: 'task/setComplete', id: e.task.id, complete: !e.done });
@@ -441,6 +441,8 @@ export function MonthView({
                     >
                       <Check className="size-3" strokeWidth={3} />
                     </button>
+                  ) : e.kind === 'due' && e.task.droppedAt ? (
+                    <Ban className="size-5 shrink-0 text-slate-400" aria-label="Dropped" />
                   ) : e.kind === 'due' ? (
                     <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
                       <Check className="size-3" strokeWidth={3} />
@@ -463,9 +465,11 @@ export function MonthView({
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {e.kind === 'due'
-                        ? e.done
-                          ? 'Finished'
-                          : 'Due this day'
+                        ? e.task.droppedAt
+                          ? 'Dropped'
+                          : e.done
+                            ? 'Finished'
+                            : 'Due this day'
                         : `${formatDuration(e.minutes ?? 0)} ${e.done ? 'done' : 'planned'}`}
                     </p>
                   </button>

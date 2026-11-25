@@ -11,7 +11,7 @@ export function loggedMinutesByTask(logs: readonly WorkLog[]): Map<string, Minut
 }
 
 export function isTaskComplete(task: Task, loggedMinutes: Minutes): boolean {
-  return Boolean(task.completedAt) || loggedMinutes >= task.estimateMinutes;
+  return Boolean(task.completedAt) || Boolean(task.droppedAt) || loggedMinutes >= task.estimateMinutes;
 }
 
 export function remainingMinutes(task: Task, loggedMinutes: Minutes): Minutes {
