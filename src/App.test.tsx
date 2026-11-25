@@ -59,6 +59,31 @@ describe('App', () => {
     expect(screen.getAllByText(/usually 12pm – 6pm/)).toHaveLength(1);
   });
 
+  it('reads the due date and hours from the name of a new task', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'Add your first task' }));
+    let dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'History essay due Fri 3h');
+    expect(within(dialog).getByText('Adds "History essay", due Fri, Nov 6, 3h')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks[0]).toMatchObject({
+      title: 'History essay',
+      dueDate: '2026-11-06',
+      estimateMinutes: 180,
+    });
+
+    // "Keep as typed" saves the name as it is, with the date and hours from the fields.
+    await user.click(screen.getByRole('button', { name: 'Add task' }));
+    dialog = screen.getByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByLabelText('What do you need to do?'), 'Plan party for Friday');
+    await user.click(within(dialog).getByRole('button', { name: 'Keep as typed' }));
+    await user.type(within(dialog).getByLabelText('Estimated hours'), '1');
+    await user.click(within(dialog).getByRole('button', { name: 'Add task' }));
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks[1]).toMatchObject({ title: 'Plan party for Friday', dueDate: '2026-11-09' });
+  });
+
   it('logs part of an item and pushes an item to tomorrow', async () => {
     const user = userEvent.setup();
     renderApp();
