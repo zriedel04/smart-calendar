@@ -96,6 +96,7 @@ export function parseAppData(json: string): AppData {
           (t.planDate === undefined || isISODate(t.planDate)) &&
           (t.startAt === undefined ||
             (isRecord(t.startAt) && isISODate(t.startAt.date) && typeof t.startAt.start === 'number' && t.startAt.start >= 0 && t.startAt.start < 1440)) &&
+          (t.droppedAt === undefined || typeof t.droppedAt === 'string') &&
           (t.seriesId === undefined || typeof t.seriesId === 'string'),
       )
     : [];

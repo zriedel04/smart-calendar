@@ -86,6 +86,43 @@ describe('App', () => {
     expect(screen.queryByText('Pushed to tomorrow')).not.toBeInTheDocument();
   });
 
+  it("drops an overdue task so it takes no more time, without counting it as done", async () => {
+    const user = userEvent.setup();
+    const data = createSampleData('2026-11-02');
+    data.tasks = [
+      { id: 'missed', title: 'Missed quiz', dueDate: '2026-10-30', estimateMinutes: 120, createdAt: '2026-10-20T00:00:00.000Z' },
+    ];
+    data.series = [];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderApp();
+
+    await user.click(screen.getByRole('button', { name: 'More for "Missed quiz"' }));
+    await user.click(screen.getByRole('button', { name: 'Drop it' }));
+    expect(screen.queryByRole('checkbox', { name: 'Mark "Missed quiz" done' })).not.toBeInTheDocument();
+    expect(screen.getByText('Dropped "Missed quiz"')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks[0]).toMatchObject({ droppedAt: expect.any(String) });
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).tasks[0]).not.toHaveProperty('completedAt');
+
+    // Search and the month calendar show it as dropped, not done.
+    await user.keyboard('/');
+    const search = screen.getByRole('dialog', { name: 'Search' });
+    await user.type(within(search).getByLabelText('Search tasks and events'), 'quiz');
+    expect(within(search).getByLabelText('Dropped')).toBeInTheDocument();
+    expect(within(search).queryByLabelText('Done')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Month' }));
+    await user.click(screen.getByRole('button', { name: /Friday, October 30/ }));
+    expect(screen.getByText('Dropped')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Mark "Missed quiz" not finished' })).not.toBeInTheDocument();
+
+    // It waits in Tasks as dropped, and can come back.
+    await user.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByText('Finished or dropped (1)')).toBeInTheDocument();
+    await user.click(screen.getByText('Finished or dropped (1)'));
+    await user.click(screen.getByRole('button', { name: 'Bring back' }));
+    expect(screen.getByRole('button', { name: 'Drop "Missed quiz"' })).toBeInTheDocument();
+  });
+
   it('adds a repeating task that lands on each matching day', async () => {
     const user = userEvent.setup();
     renderApp();

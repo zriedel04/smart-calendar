@@ -1,4 +1,4 @@
-import { CheckCircle2, MapPin, Search } from 'lucide-react';
+import { Ban, CheckCircle2, MapPin, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { CalendarEvent } from '../lib/availability';
 import { searchData } from '../lib/search';
@@ -110,7 +110,11 @@ export function SearchDialog({
                       {task.seriesId ? 'Repeating' : `Due ${day(task.dueDate)}`}
                     </span>
                   </span>
-                  {done && <CheckCircle2 className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
+                  {task.droppedAt ? (
+                    <Ban className="size-4 shrink-0 text-slate-400" aria-label="Dropped" />
+                  ) : (
+                    done && <CheckCircle2 className="size-4 shrink-0 text-emerald-500" aria-label="Done" />
+                  )}
                 </button>
               </li>
             ))}

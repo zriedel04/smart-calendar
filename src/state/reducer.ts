@@ -19,6 +19,8 @@ export type Action =
   | { type: 'task/setComplete'; id: string; complete: boolean }
   /** Starts work on a task at a time of day you chose, or (with null) lets the app suggest one again. */
   | { type: 'task/startAt'; id: string; date: ISODate; start: number | null }
+  /** Drops a task you won't do, so no more time is planned for it, or brings it back. */
+  | { type: 'task/drop'; id: string; dropped: boolean }
   | { type: 'task/push'; id: string; until: ISODate }
   | { type: 'task/unpush'; id: string }
   | { type: 'task/plan'; id: string; date: ISODate | null }
@@ -149,6 +151,16 @@ function apply(state: AppData, action: Action): AppData {
           if (t.id !== action.id) return t;
           const { startAt: _startAt, ...rest } = t;
           return action.start === null ? rest : { ...rest, startAt: { date: action.date, start: action.start } };
+        }),
+      };
+    case 'task/drop':
+      return {
+        ...(action.dropped ? withoutTimerOn(state, action.id) : state),
+        tasks: state.tasks.map((t) => {
+          if (t.id !== action.id) return t;
+          if (action.dropped) return { ...t, droppedAt: new Date().toISOString() };
+          const { droppedAt: _droppedAt, ...rest } = t;
+          return rest;
         }),
       };
     case 'task/push':
