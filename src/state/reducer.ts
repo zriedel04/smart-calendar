@@ -17,6 +17,8 @@ export type Action =
   | { type: 'task/update'; id: string; draft: TaskDraft }
   | { type: 'task/delete'; id: string }
   | { type: 'task/setComplete'; id: string; complete: boolean }
+  /** Starts work on a task at a time of day you chose, or (with null) lets the app suggest one again. */
+  | { type: 'task/startAt'; id: string; date: ISODate; start: number | null }
   /** Drops a task you won't do, so no more time is planned for it, or brings it back. */
   | { type: 'task/drop'; id: string; dropped: boolean }
   | { type: 'task/push'; id: string; until: ISODate }
@@ -140,6 +142,15 @@ function apply(state: AppData, action: Action): AppData {
           if (action.complete) return { ...t, completedAt: new Date().toISOString() };
           const { completedAt: _completedAt, ...rest } = t;
           return rest;
+        }),
+      };
+    case 'task/startAt':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) => {
+          if (t.id !== action.id) return t;
+          const { startAt: _startAt, ...rest } = t;
+          return action.start === null ? rest : { ...rest, startAt: { date: action.date, start: action.start } };
         }),
       };
     case 'task/drop':

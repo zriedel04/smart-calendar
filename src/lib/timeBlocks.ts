@@ -1,4 +1,4 @@
-import type { Minutes, TimeRange } from './time';
+import { MINUTES_PER_DAY, subtractRanges, type Minutes, type TimeRange } from './time';
 
 export interface TimedItem {
   taskId: string;
@@ -43,4 +43,29 @@ export function timeBlocks(
 /** Rounds a time of day up to the next quarter hour, so suggestions start on a tidy time. */
 export function nextQuarterHour(minutes: Minutes): Minutes {
   return Math.ceil(minutes / 15) * 15;
+}
+
+/**
+ * Like timeBlocks, but items you gave a start time to stay there, and the rest fill the free time
+ * around them. A pinned item keeps its time even outside work hours or over an event: you chose it.
+ */
+export function timeBlocksWithPins(
+  free: readonly TimeRange[],
+  items: readonly { taskId: string; minutes: Minutes }[],
+  pins: ReadonlyMap<string, Minutes>,
+  from: Minutes = 0,
+): TimedItem[] {
+  const pinned = new Map<string, TimeRange>();
+  for (const item of items) {
+    const start = pins.get(item.taskId);
+    if (start === undefined || item.minutes <= 0) continue;
+    pinned.set(item.taskId, { start, end: Math.min(MINUTES_PER_DAY, start + item.minutes) });
+  }
+  const rest = timeBlocks(
+    subtractRanges(free, [...pinned.values()]),
+    items.filter((i) => !pinned.has(i.taskId)),
+    from,
+  );
+  const byTask = new Map(rest.map((t) => [t.taskId, t.ranges]));
+  return items.map(({ taskId }) => ({ taskId, ranges: pinned.has(taskId) ? [pinned.get(taskId)!] : (byTask.get(taskId) ?? []) }));
 }

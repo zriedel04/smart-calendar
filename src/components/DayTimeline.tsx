@@ -1,3 +1,5 @@
+import { GripVertical, Pin } from 'lucide-react';
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { eventKind, type CalendarEvent } from '../lib/availability';
 import { placeItems, timelineHours, type TimelineItem } from '../lib/dayLayout';
 import { formatClock, formatRange, type Minutes, type TimeRange } from '../lib/time';
@@ -11,7 +13,12 @@ export interface WorkBlock {
   range: TimeRange;
   /** Extra words after the time, such as "1h left after this". */
   note?: string;
+  /** True when you chose the start time by moving the block. */
+  pinned?: boolean;
 }
+
+/** Moving a block snaps to quarter hours. */
+const SNAP = 15;
 
 type Entry = { kind: 'event'; event: CalendarEvent } | { kind: 'work'; block: WorkBlock };
 
@@ -34,6 +41,8 @@ export function DayTimeline({
   now,
   onOpenEvent,
   onOpenTask,
+  onMoveTask,
+  onUnpinTask,
 }: {
   /** Timed events only; all-day ones go above the timeline. */
   events: readonly CalendarEvent[];
@@ -43,7 +52,14 @@ export function DayTimeline({
   now?: Minutes;
   onOpenEvent: (event: CalendarEvent) => void;
   onOpenTask: (task: Task) => void;
+  /** Starts work on the task at this time instead of the suggested one. Without it, blocks can't be moved. */
+  onMoveTask?: (task: Task, start: Minutes) => void;
+  /** Goes back to the suggested time. */
+  onUnpinTask?: (task: Task) => void;
 }) {
+  // The block being dragged by its handle, and how far it has moved so far.
+  const [drag, setDrag] = useState<{ key: string; delta: Minutes } | null>(null);
+  const dragStart = useRef<{ key: string; y: number } | null>(null);
   const items: TimelineItem<Entry>[] = [
     ...events.map((event) => ({ start: event.start, end: event.end, item: { kind: 'event' as const, event } })),
     ...blocks.map((block) => ({ start: block.range.start, end: block.range.end, item: { kind: 'work' as const, block } })),
@@ -92,24 +108,91 @@ export function DayTimeline({
               : ['Work', formatRange(item.block.range), item.block.note].filter(Boolean).join(' · ');
           // A short block has one line: just the start time, or only the title in a narrow column.
           const detail = !short ? label : lanes > 1 ? '' : formatClock(start);
+          const key = item.kind === 'event' ? `e-${item.event.id}` : `w-${item.block.task.id}-${start}`;
+          const block = item.kind === 'work' ? item.block : null;
+          const movable = Boolean(block && onMoveTask);
+          const delta = drag?.key === key ? drag.delta : 0;
+          // Where the block may go: anywhere on the timeline, keeping all of it on the day.
+          const moveTo = (minutes: Minutes) => Math.min(Math.max(minutes, hours.start), hours.end - (end - start));
+          const finishMove = (by: Minutes) => {
+            if (block && by !== 0) onMoveTask?.(block.task, moveTo(start + by));
+          };
+          const onPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+            e.currentTarget.setPointerCapture?.(e.pointerId);
+            dragStart.current = { key, y: e.clientY };
+            setDrag({ key, delta: 0 });
+          };
+          const onPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
+            if (dragStart.current?.key !== key) return;
+            const minutes = Math.round(((e.clientY - dragStart.current.y) / HOUR_HEIGHT) * (60 / SNAP)) * SNAP;
+            setDrag({ key, delta: moveTo(start + minutes) - start });
+          };
+          const onPointerUp = () => {
+            if (dragStart.current?.key !== key) return;
+            dragStart.current = null;
+            setDrag(null);
+            finishMove(delta);
+          };
+          const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+            e.preventDefault();
+            finishMove(moveTo(start + (e.key === 'ArrowUp' ? -SNAP : SNAP)) - start);
+          };
           return (
-            <button
-              key={item.kind === 'event' ? `e-${item.event.id}` : `w-${item.block.task.id}-${start}`}
-              type="button"
-              aria-label={`${title}, ${label}`}
-              onClick={() => (item.kind === 'event' ? onOpenEvent(item.event) : onOpenTask(item.block.task))}
-              className={cx(
-                'absolute flex overflow-hidden rounded-lg px-2 text-left focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none',
-                short ? 'items-center gap-1.5 py-0.5' : 'flex-col gap-px py-1',
-                item.kind === 'event'
-                  ? EVENT_CHIP[eventKind(item.event)]
-                  : 'border-[1.5px] border-dashed border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-400/50 dark:bg-indigo-500/15 dark:text-indigo-100',
-              )}
-              style={style}
+            <div
+              key={key}
+              className={cx('absolute', delta !== 0 && 'z-10 opacity-90 shadow-lg')}
+              style={{ ...style, top: style.top + px(delta) }}
             >
-              <span className={cx('min-w-0 truncate font-semibold', short ? 'text-xs' : 'text-[13px]')}>{title}</span>
-              {detail && <span className={cx('min-w-0 text-[11px] opacity-80', short ? 'shrink-0' : 'line-clamp-2')}>{detail}</span>}
-            </button>
+              <button
+                type="button"
+                aria-label={`${title}, ${label}`}
+                onClick={() => (item.kind === 'event' ? onOpenEvent(item.event) : onOpenTask(item.block.task))}
+                className={cx(
+                  'flex size-full overflow-hidden rounded-lg px-2 text-left focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none',
+                  short ? 'items-center gap-1.5 py-0.5' : 'flex-col gap-px py-1',
+                  movable && (block?.pinned ? 'pr-14' : 'pr-8'),
+                  item.kind === 'event'
+                    ? EVENT_CHIP[eventKind(item.event)]
+                    : 'border-[1.5px] border-dashed border-indigo-300 bg-indigo-50 text-indigo-800 dark:border-indigo-400/50 dark:bg-indigo-500/15 dark:text-indigo-100',
+                  block?.pinned && 'border-solid',
+                )}
+              >
+                <span className={cx('min-w-0 truncate font-semibold', short ? 'text-xs' : 'text-[13px]')}>{title}</span>
+                {detail && <span className={cx('min-w-0 text-[11px] opacity-80', short ? 'shrink-0' : 'line-clamp-2')}>{detail}</span>}
+              </button>
+              {movable && block && (
+                <div className="absolute top-0 right-0 flex h-full max-h-9 items-center text-indigo-500 dark:text-indigo-300">
+                  {block.pinned && onUnpinTask && (
+                    <button
+                      type="button"
+                      onClick={() => onUnpinTask(block.task)}
+                      aria-label={`Let the app pick a time for "${block.task.title}"`}
+                      title="Pinned here. Tap to let the app pick the time again."
+                      className="flex h-full w-6 items-center justify-center"
+                    >
+                      <Pin className="size-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`Move "${block.task.title}", starts ${formatClock(start + delta)}`}
+                    title="Drag to pick a time. Arrow keys move it 15 minutes."
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    onPointerCancel={() => {
+                      dragStart.current = null;
+                      setDrag(null);
+                    }}
+                    onKeyDown={onKeyDown}
+                    className="flex h-full w-7 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+                  >
+                    <GripVertical className="size-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           );
         })}
 

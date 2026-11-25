@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextQuarterHour, timeBlocks } from './timeBlocks';
+import { nextQuarterHour, timeBlocks, timeBlocksWithPins } from './timeBlocks';
 
 const h = (hours: number) => hours * 60;
 
@@ -32,5 +32,34 @@ describe('timeBlocks', () => {
   it('rounds up to the next quarter hour', () => {
     expect(nextQuarterHour(h(9) + 1)).toBe(h(9.25));
     expect(nextQuarterHour(h(9))).toBe(h(9));
+  });
+});
+
+describe('timeBlocksWithPins', () => {
+  it('keeps a pinned item at its time and lays the rest around it', () => {
+    const free = [{ start: h(12), end: h(18) }];
+    const items = [
+      { taskId: 'a', minutes: 60 },
+      { taskId: 'b', minutes: 120 },
+      { taskId: 'c', minutes: 60 },
+    ];
+    expect(timeBlocksWithPins(free, items, new Map([['b', h(12.5)]]))).toEqual([
+      // The half hour before the pinned item gets used first, as with any break.
+      { taskId: 'a', ranges: [{ start: h(12), end: h(12.5) }, { start: h(14.5), end: h(15) }] },
+      { taskId: 'b', ranges: [{ start: h(12.5), end: h(14.5) }] },
+      { taskId: 'c', ranges: [{ start: h(15), end: h(16) }] },
+    ]);
+  });
+
+  it('lets a pinned item sit outside work hours, taking no work time', () => {
+    const free = [{ start: h(12), end: h(13) }];
+    const items = [
+      { taskId: 'early', minutes: 30 },
+      { taskId: 'a', minutes: 60 },
+    ];
+    expect(timeBlocksWithPins(free, items, new Map([['early', h(9)]]))).toEqual([
+      { taskId: 'early', ranges: [{ start: h(9), end: h(9.5) }] },
+      { taskId: 'a', ranges: [{ start: h(12), end: h(13) }] },
+    ]);
   });
 });
